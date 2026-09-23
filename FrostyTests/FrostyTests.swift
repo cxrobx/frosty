@@ -1,0 +1,161 @@
+import XCTest
+
+final class BarLayoutTests: XCTestCase {
+    let config = FrostyConfig(items: [
+        .app("finder"),
+        .group(.init(name: "Music", apps: ["reaper", "fl"])),
+        .app("safari"),
+    ])
+
+    func testPlacedFirstThenLooseRunningAfterSeparator() {
+        let entries = BarLayout.entries(config: config, running: ["finder", "slack", "zen"])
+        XCTAssertEqual(entries, [
+            .app(id: "finder", running: true, placed: true),
+            .group(name: "Music", apps: ["reaper", "fl"], anyRunning: false),
+            .app(id: "safari", running: false, placed: true),
+            .separator,
+            .app(id: "slack", running: true, placed: false),
+            .app(id: "zen", running: true, placed: false),
+        ])
+    }
+
+    func testGroupedAppIsNeverShownLoose() {
+        let entries = BarLayout.entries(config: config, running: ["reaper"])
+        XCTAssertFalse(entries.contains(.app(id: "reaper", running: true, placed: false)))
+        XCTAssertEqual(entries[1], .group(name: "Music", apps: ["reaper", "fl"], anyRunning: true))
+        XCTAssertFalse(entries.contains(.separator))
+    }
+
+    func testNoSeparatorWhenNothingIsPlaced() {
+        let entries = BarLayout.entries(config: FrostyConfig(items: []), running: ["a", "a", "b"])
+        XCTAssertEqual(entries, [.app(id: "a", running: true, placed: false),
+                                 .app(id: "b", running: true, placed: false)])
+    }
+}
+
+final class ConfigEditTests: XCTestCase {
+    func testPinIgnoresAlreadyPlacedApps() {
+        var c = FrostyConfig(items: [.group(.init(name: "G", apps: ["a"]))])
+        c.pin("a")
+        c.pin("b")
+        XCTAssertEqual(c.items, [.group(.init(name: "G", apps: ["a"])), .app("b")])
+    }
+
+    func testUnpinLastAppDropsTheGroup() {
+        var c = FrostyConfig(items: [.app("x"), .group(.init(name: "G", apps: ["a"]))])
+        c.unpin("a")
+        XCTAssertEqual(c.items, [.app("x")])
+    }
+
+    func testMoveToNewGroupKeepsThePosition() {
+        var c = FrostyConfig(items: [.app("a"), .app("b"), .app("c")])
+        c.move("b", toGroup: "New")
+        XCTAssertEqual(c.items, [.app("a"), .group(.init(name: "New", apps: ["b"])), .app("c")])
+        c.move("c", toGroup: "New")
+        XCTAssertEqual(c.items, [.app("a"), .group(.init(name: "New", apps: ["b", "c"]))])
+    }
+
+    func testMoveUnplacedRunningAppIntoGroup() {
+        var c = FrostyConfig(items: [.group(.init(name: "G", apps: ["a"]))])
+        c.move("z", toGroup: "G")
+        XCTAssertEqual(c.items, [.group(.init(name: "G", apps: ["a", "z"]))])
+    }
+
+    func testRemoveFromGroupPinsRightAfterIt() {
+        var c = FrostyConfig(items: [.group(.init(name: "G", apps: ["a", "b"])), .app("c")])
+        c.removeFromGroup("a")
+        XCTAssertEqual(c.items, [.group(.init(name: "G", apps: ["b"])), .app("a"), .app("c")])
+        c.removeFromGroup("b")
+        XCTAssertEqual(c.items, [.app("b"), .app("a"), .app("c")])
+    }
+
+    func testUngroupInlinesApps() {
+        var c = FrostyConfig(items: [.app("x"), .group(.init(name: "G", apps: ["a", "b"])), .app("y")])
+        c.ungroup("G")
+        XCTAssertEqual(c.items, [.app("x"), .app("a"), .app("b"), .app("y")])
+    }
+
+    func testRenameRejectsBlankAndDuplicateNames() {
+        var c = FrostyConfig(items: [.group(.init(name: "A", apps: ["a"])), .group(.init(name: "B", apps: ["b"]))])
+        c.renameGroup("A", to: "  ")
+        c.renameGroup("A", to: "B")
+        XCTAssertEqual(c.groupNames, ["A", "B"])
+        c.renameGroup("A", to: " Tools ")
+        XCTAssertEqual(c.groupNames, ["Tools", "B"])
+    }
+
+    func testHandWrittenJSONDecodesAndRoundTrips() throws {
+        let json = #"{"items":[{"app":"com.apple.finder"},{"group":"Music","apps":["a","b"]}]}"#
+        let c = try JSONDecoder().decode(FrostyConfig.self, from: Data(json.utf8))
+        XCTAssertEqual(c.items, [.app("com.apple.finder"), .group(.init(name: "Music", apps: ["a", "b"]))])
+        XCTAssertTrue(c.autoHide)
+        XCTAssertEqual(c.iconSize, 48)
+        let again = try JSONDecoder().decode(FrostyConfig.self, from: JSONEncoder().encode(c))
+        XCTAssertEqual(again, c)
+    }
+
+    func testMalformedItemIsRejected() {
+        let json = #"{"items":[{"nope":1}]}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(FrostyConfig.self, from: Data(json.utf8)))
+    }
+}
+
+final class FakeDock: DockDefaults {
+    var prefs: [String: Any] = [:]
+    var restarts = 0
+    func value(_ key: String) -> Any? { prefs[key] }
+    func set(_ value: Any?, for key: String) { prefs[key] = value }
+    func restartDock() { restarts += 1 }
+}
+
+final class DockHiderTests: XCTestCase {
+    var url: URL!
+
+    override func setUp() {
+        url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString).appendingPathComponent("dock-original.json")
+    }
+
+    override func tearDown() {
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    }
+
+    func testHideThenRestorePutsOriginalsBack() throws {
+        let dock = FakeDock()
+        dock.prefs = ["autohide": NSNumber(value: false)]      // delay key absent
+        let hider = DockHider(defaults: dock, snapshotURL: url)
+
+        try hider.hide()
+        XCTAssertTrue(hider.isHidden)
+        XCTAssertEqual(dock.prefs["autohide"] as? Bool, true)
+        XCTAssertEqual(dock.prefs["autohide-delay"] as? Double, DockHider.hiddenDelay)
+
+        hider.restore()
+        XCTAssertFalse(hider.isHidden)
+        XCTAssertEqual((dock.prefs["autohide"] as? NSNumber)?.boolValue, false)
+        XCTAssertNil(dock.prefs["autohide-delay"], "an absent key must be deleted, not zeroed")
+        XCTAssertEqual(dock.restarts, 2)
+    }
+
+    func testCrashThenRelaunchKeepsTheTrueOriginals() throws {
+        let dock = FakeDock()
+        dock.prefs = ["autohide": NSNumber(value: false), "autohide-delay": NSNumber(value: 0.2)]
+        try DockHider(defaults: dock, snapshotURL: url).hide()
+
+        // Crash: no restore. The next launch hides again over the hidden state.
+        let relaunched = DockHider(defaults: dock, snapshotURL: url)
+        try relaunched.hide()
+        relaunched.restore()
+
+        XCTAssertEqual((dock.prefs["autohide"] as? NSNumber)?.boolValue, false)
+        XCTAssertEqual((dock.prefs["autohide-delay"] as? NSNumber)?.doubleValue, 0.2)
+    }
+
+    func testRestoreWithoutSnapshotChangesNothing() {
+        let dock = FakeDock()
+        dock.prefs = ["autohide": NSNumber(value: true)]
+        DockHider(defaults: dock, snapshotURL: url).restore()
+        XCTAssertEqual(dock.restarts, 0)
+        XCTAssertEqual((dock.prefs["autohide"] as? NSNumber)?.boolValue, true)
+    }
+}

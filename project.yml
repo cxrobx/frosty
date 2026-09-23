@@ -1,0 +1,58 @@
+name: Frosty
+options:
+  bundleIdPrefix: com.cx
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.2"
+  createIntermediateGroups: true
+  defaultConfig: Debug
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+targets:
+  Frosty:
+    type: application
+    platform: macOS
+    sources:
+      - path: Frosty
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cx.frosty
+        PRODUCT_NAME: Frosty
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Frosty
+        # Accessory app: no Dock icon of its own, no Cmd-Tab entry.
+        INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright 2026 Chris X. All rights reserved."
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Automatic
+
+  # Not hosted by the app on purpose: a hosted test run would launch Frosty and
+  # hide the real Dock. The pure model files are compiled straight in instead.
+  FrostyTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: FrostyTests
+      - path: Frosty/Model
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.cx.frosty.tests
+
+schemes:
+  Frosty:
+    build:
+      targets:
+        Frosty: all
+        FrostyTests: [test]
+    test:
+      targets:
+        - FrostyTests
