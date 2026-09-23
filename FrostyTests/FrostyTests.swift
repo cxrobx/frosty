@@ -122,9 +122,84 @@ final class ConfigEditTests: XCTestCase {
         XCTAssertEqual(c.iconSize, 16)
     }
 
+    func testBadgeSettingsDefaultOnAndRoundTripSorted() throws {
+        let plain = try JSONDecoder().decode(FrostyConfig.self, from: Data(#"{"items":[]}"#.utf8))
+        XCTAssertTrue(plain.showBadges)
+        XCTAssertEqual(plain.hiddenBadges, [])
+        var c = plain
+        c.toggleBadge("z")
+        c.toggleBadge("a")
+        let json = String(decoding: try JSONEncoder().encode(c), as: UTF8.self)
+        XCTAssertTrue(json.contains(#""hiddenBadges":["a","z"]"#), json)
+        XCTAssertEqual(try JSONDecoder().decode(FrostyConfig.self, from: Data(json.utf8)), c)
+        c.toggleBadge("a")
+        XCTAssertEqual(c.hiddenBadges, ["z"])
+    }
+
     func testMalformedItemIsRejected() {
         let json = #"{"items":[{"nope":1}]}"#
         XCTAssertThrowsError(try JSONDecoder().decode(FrostyConfig.self, from: Data(json.utf8)))
+    }
+}
+
+final class DragPlacementTests: XCTestCase {
+    let base = FrostyConfig(items: [.app("a"), .group(.init(name: "G", apps: ["g1", "g2"])), .app("b")])
+
+    func testReorderTopLevelApps() {
+        var c = base
+        c.place(.app("b"), beside: .app("a"), after: false)
+        XCTAssertEqual(c.items, [.app("b"), .app("a"), .group(.init(name: "G", apps: ["g1", "g2"]))])
+        c.place(.app("b"), beside: .group("G"), after: true)
+        XCTAssertEqual(c.items, [.app("a"), .group(.init(name: "G", apps: ["g1", "g2"])), .app("b")])
+    }
+
+    func testMoveGroup() {
+        var c = base
+        c.place(.group("G"), beside: .app("b"), after: true)
+        XCTAssertEqual(c.items, [.app("a"), .app("b"), .group(.init(name: "G", apps: ["g1", "g2"]))])
+    }
+
+    func testDragOutOfGroupOntoTheBar() {
+        var c = base
+        c.place(.app("g1"), beside: .app("a"), after: false)
+        XCTAssertEqual(c.items, [.app("g1"), .app("a"), .group(.init(name: "G", apps: ["g2"])), .app("b")])
+        c.place(.app("g2"), beside: .app("b"), after: true)
+        XCTAssertEqual(c.items, [.app("g1"), .app("a"), .app("b"), .app("g2")], "the emptied group goes")
+    }
+
+    func testReorderInsideAGroupAndJoinFromTheBar() {
+        var c = base
+        c.place(.app("g2"), beside: .app("g1"), after: false)
+        XCTAssertEqual(c.items[1], .group(.init(name: "G", apps: ["g2", "g1"])))
+        c.place(.app("a"), beside: .app("g2"), after: true)
+        XCTAssertEqual(c.items, [.group(.init(name: "G", apps: ["g2", "a", "g1"])), .app("b")])
+    }
+
+    func testDroppingAnUnplacedAppPinsItThere() {
+        var c = base
+        c.place(.app("new"), beside: .app("b"), after: false)
+        XCTAssertEqual(c.items, [.app("a"), .group(.init(name: "G", apps: ["g1", "g2"])), .app("new"), .app("b")])
+    }
+
+    func testNoOpDrops() {
+        var c = base
+        c.place(.app("a"), beside: .app("a"), after: true)
+        c.place(.app("a"), beside: .app("loose"), after: true)
+        c.place(.group("G"), beside: .app("g1"), after: true)
+        c.place(.group("missing"), beside: .app("a"), after: true)
+        XCTAssertEqual(c, base)
+    }
+}
+
+final class BadgeTests: XCTestCase {
+    func testCombined() {
+        XCTAssertNil(Badge.combined([]))
+        XCTAssertNil(Badge.combined(["", ""]))
+        XCTAssertEqual(Badge.combined(["!"]), "!")
+        XCTAssertEqual(Badge.combined(["3", "", "24"]), "27")
+        XCTAssertEqual(Badge.combined(["1,200", "5"]), "1205")
+        XCTAssertEqual(Badge.combined(["3", "!"]), "3")
+        XCTAssertEqual(Badge.combined(["!", "•"]), "•")
     }
 }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct BarView: View {
     @ObservedObject var model: FrostyModel
@@ -81,15 +82,13 @@ struct AppTile: View {
     @State private var hovering = false
 
     var body: some View {
-        Button {
-            model.openGroup = nil
-            Apps.open(id)
-        } label: {
-            VStack(spacing: 2) {
+        // A tap, not a Button: a Button keeps the mouse to itself, so `onDrag` never began.
+        VStack(spacing: 2) {
                 Image(nsImage: Apps.icon(id))
                     .resizable()
                     .interpolation(.high)
                     .frame(width: size, height: size)
+                    .overlay(alignment: .topTrailing) { BadgeView(text: model.badge(id), size: size) }
                     .scaleEffect(hovering ? 1.08 : 1, anchor: .bottom)
                     .animation(.easeOut(duration: 0.12), value: hovering)
                 if showsName {
@@ -99,13 +98,22 @@ struct AppTile: View {
                         .frame(width: size + 24)
                 }
                 RunningDot(visible: running)
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            model.openGroup = nil
+            Apps.open(id)
+        }
+        .accessibilityAddTraits(.isButton)
         .onHover { hovering = $0 }
         .help(Apps.name(id))
         .contextMenu { AppMenu(model: model, id: id, running: running, placed: placed, group: group) }
+        .background(TileFrameReporter(model: model, id: id))
+        .overlay { DropMarker(model: model, target: .app(id)) }
+        .onDrag { TileDrop.begin(.app(id), model: model) }
+        // Loose running apps can be dragged in to pin them, but aren't a place to drop.
+        .onDrop(of: [TileDrop.type], delegate: TileDrop(model: model, target: .app(id), enabled: placed,
+                                                         width: showsName ? size + 24 : size, acceptsInto: false))
     }
 }
 
@@ -144,6 +152,22 @@ struct AppMenu: View {
         }
         Divider()
         Button("Show in Finder") { Apps.revealInFinder(id) }
+        if model.config.showBadges {
+            Button(model.config.hiddenBadges.contains(id) ? "Show Badge" : "Hide Badge") {
+                model.edit { $0.toggleBadge(id) }
+            }
+        }
+        Divider()
+        KeepOpenToggle(model: model)
+    }
+}
+
+/// Switches auto-hide off and on from any tile's menu.
+struct KeepOpenToggle: View {
+    @ObservedObject var model: FrostyModel
+    var body: some View {
+        Toggle("Keep Frosty Open", isOn: Binding(get: { !model.config.autoHide },
+                                                 set: { open in model.edit { $0.autoHide = !open } }))
     }
 }
 
@@ -162,18 +186,16 @@ struct GroupTile: View {
     }
 
     var body: some View {
-        Button {
-            isOpen.wrappedValue.toggle()
-        } label: {
-            VStack(spacing: 2) {
+        VStack(spacing: 2) {
                 GroupIcon(apps: apps, size: size)
+                    .overlay(alignment: .topTrailing) { BadgeView(text: model.groupBadge(apps), size: size) }
                     .scaleEffect(hovering ? 1.08 : 1, anchor: .bottom)
                     .animation(.easeOut(duration: 0.12), value: hovering)
                 RunningDot(visible: anyRunning)
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .onTapGesture { isOpen.wrappedValue.toggle() }
+        .accessibilityAddTraits(.isButton)
         .onHover { hovering = $0 }
         .help(isOpenApps ? BarEntry.openAppsTitle : name)
         // Where the group panel should point; read by BarController, not rendered.
@@ -188,7 +210,13 @@ struct GroupTile: View {
             } else {
                 userGroupMenu
             }
+            Divider()
+            KeepOpenToggle(model: model)
         }
+        .overlay { DropMarker(model: model, target: .group(name)) }
+        .onDrag { isOpenApps ? NSItemProvider() : TileDrop.begin(.group(name), model: model) }
+        .onDrop(of: [TileDrop.type], delegate: TileDrop(model: model, target: .group(name), enabled: !isOpenApps,
+                                                         width: size, acceptsInto: true))
     }
 
     private var isOpenApps: Bool { name == BarEntry.openAppsKey }
@@ -264,4 +292,133 @@ struct GroupGrid: View {
         }
         .padding(14)
     }
+}
+
+/// A Dock-style count in the icon's top-right corner.
+private struct BadgeView: View {
+    let text: String?
+    let size: CGFloat
+
+    var body: some View {
+        if let text {
+            Text(text)
+                .font(.system(size: max(9, size * 0.24), weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .padding(.horizontal, size * 0.08)
+                .frame(minWidth: size * 0.36, minHeight: size * 0.36)
+                .background(Capsule().fill(Color.red))
+                .offset(x: size * 0.08)
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+// MARK: - Drag and drop
+
+/// Dropping one tile onto another. The halves of a tile mean before and after
+/// it; the middle half of a group tile means into the group.
+struct TileDrop: DropDelegate {
+    /// Plain text: a private type would need declaring in Info.plist, and an
+    /// undeclared one never matches a drop target. The text is a one-off token,
+    /// so a text drag from another app is never taken for a tile.
+    static let type = UTType.plainText
+
+    let model: FrostyModel
+    let target: FrostyConfig.Ref
+    let enabled: Bool
+    let width: CGFloat
+    let acceptsInto: Bool
+
+    static func begin(_ ref: FrostyConfig.Ref, model: FrostyModel) -> NSItemProvider {
+        let token = "frosty-tile-" + UUID().uuidString
+        model.dragging = ref
+        model.dragToken = token
+        return NSItemProvider(object: token as NSString)
+    }
+
+    private func position(_ info: DropInfo) -> DropHint.Position {
+        let x = info.location.x
+        if acceptsInto, case .app = model.dragging, x > width * 0.25, x < width * 0.75 { return .into }
+        return x < width / 2 ? .before : .after
+    }
+
+    func validateDrop(info: DropInfo) -> Bool {
+        enabled && model.dragging != nil && model.dragging != target
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        let hint = DropHint(target: target, position: position(info))
+        if model.dropHint != hint { model.dropHint = hint }
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        if model.dropHint?.target == target { model.dropHint = nil }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard let dragged = model.dragging, let token = model.dragToken,
+              let provider = info.itemProviders(for: [Self.type]).first else { return false }
+        let position = position(info)
+        let (model, target) = (model, target)
+        model.dragging = nil
+        model.dragToken = nil
+        model.dropHint = nil
+        _ = provider.loadObject(ofClass: NSString.self) { text, _ in
+            DispatchQueue.main.async {
+                // `dragging` outlives a drag cancelled outside the bar; the token doesn't match another app's text.
+                guard (text as? String) == token else { return }
+                model.edit { config in
+                    if position == .into, case .app(let id) = dragged, case .group(let name) = target {
+                        config.move(id, toGroup: name)
+                    } else {
+                        config.place(dragged, beside: target, after: position == .after)
+                    }
+                }
+            }
+        }
+        return true
+    }
+}
+
+/// Where the dragged tile would land: a bar at the tile's edge, or a ring
+/// round a group it would join.
+private struct DropMarker: View {
+    @ObservedObject var model: FrostyModel
+    let target: FrostyConfig.Ref
+
+    var body: some View {
+        if let hint = model.dropHint, hint.target == target {
+            switch hint.position {
+            case .into:
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                    .allowsHitTesting(false)
+            case .before, .after:
+                HStack {
+                    if hint.position == .after { Spacer() }
+                    Capsule().fill(Color.accentColor).frame(width: 3)
+                        .offset(x: hint.position == .after ? 3.5 : -3.5)
+                    if hint.position == .before { Spacer() }
+                }
+                .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+/// Registers an app tile with the model, so a right-click there can open the
+/// app's own Dock menu instead of Frosty's.
+private struct TileFrameReporter: NSViewRepresentable {
+    let model: FrostyModel
+    let id: String
+
+    func makeNSView(context: Context) -> AppTileMarker {
+        let marker = AppTileMarker()
+        model.appTiles.add(marker)
+        return marker
+    }
+
+    func updateNSView(_ marker: AppTileMarker, context: Context) { marker.appID = id }
 }

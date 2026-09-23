@@ -1,20 +1,50 @@
 import AppKit
 import Combine
 
+/// Sits inside an app tile; see `FrostyModel.appTiles`.
+final class AppTileMarker: NSView {
+    var appID = ""
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+/// Where a dragged tile would land: beside a tile, or into a group.
+struct DropHint: Equatable {
+    enum Position { case before, after, into }
+    let target: FrostyConfig.Ref
+    let position: Position
+}
+
 /// The bar's state: the saved config plus the live list of running apps.
 final class FrostyModel: ObservableObject {
     @Published private(set) var config: FrostyConfig {
         didSet { Apps.iconOverrides = config.icons }
     }
     @Published private(set) var running: [String] = []
+    /// Badge text the real Dock shows, by bundle id. Empty unless badges are on
+    /// and Frosty has Accessibility access.
+    @Published private(set) var badges: [String: String] = [:]
+    /// The tile being dragged, and where it would land if dropped now.
+    var dragging: FrostyConfig.Ref?
+    var dragToken: String?
+    @Published var dropHint: DropHint?
     /// The group whose app grid is open; keeps the bar from auto-hiding.
     @Published var openGroup: String?
     /// Horizontal centre of each group tile, in bar coordinates. Plain storage,
     /// not published, so reporting it never re-renders the bar.
     var groupTileMidX: [String: CGFloat] = [:]
+    /// A view inside each app tile, measured when a right-click arrives, so the
+    /// click can open the app's own Dock menu before SwiftUI opens Frosty's.
+    let appTiles = NSHashTable<AppTileMarker>.weakObjects()
+
+    /// The app whose tile is under a point in a window's coordinates.
+    func appTile(at point: NSPoint, in window: NSWindow) -> String? {
+        appTiles.allObjects.first { $0.window === window && $0.convert($0.bounds, to: nil).contains(point) }?.appID
+    }
 
     let configURL: URL
     private var observers: [NSObjectProtocol] = []
+    private var badgeTimer: Timer?
+    private let badgeQueue = DispatchQueue(label: "frosty.badges", qos: .utility)
 
     var entries: [BarEntry] { BarLayout.entries(config: config, running: running) }
 
@@ -38,9 +68,39 @@ final class FrostyModel: ObservableObject {
                 self?.refreshRunning()
             })
         }
+
+        // The Dock tells nobody when a badge changes, so ask it every couple of seconds.
+        badgeTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refreshBadges() }
+        badgeTimer?.tolerance = 0.5
+        refreshBadges()
     }
 
-    deinit { observers.forEach(NSWorkspace.shared.notificationCenter.removeObserver) }
+    deinit {
+        observers.forEach(NSWorkspace.shared.notificationCenter.removeObserver)
+        badgeTimer?.invalidate()
+    }
+
+    private func refreshBadges() {
+        guard config.showBadges else {
+            if !badges.isEmpty { badges = [:] }
+            return
+        }
+        badgeQueue.async { [weak self] in
+            let latest = RealDock.badges()
+            DispatchQueue.main.async {
+                guard let self, self.config.showBadges, latest != self.badges else { return }
+                self.badges = latest
+            }
+        }
+    }
+
+    /// The badge to draw on an app's tile, honouring both badge settings.
+    func badge(_ id: String) -> String? {
+        guard config.showBadges, !config.hiddenBadges.contains(id) else { return nil }
+        return badges[id]
+    }
+
+    func groupBadge(_ apps: [String]) -> String? { Badge.combined(apps.compactMap(badge)) }
 
     private func refreshRunning() {
         let ids = NSWorkspace.shared.runningApplications
@@ -64,6 +124,11 @@ final class FrostyModel: ObservableObject {
         guard c != config else { return }
         config = c
         save()
+        // A drag or an edit can empty a group whose grid is open.
+        if let open = openGroup, open != BarEntry.openAppsKey, !config.groupNames.contains(open) {
+            openGroup = nil
+        }
+        refreshBadges()
     }
 
     /// Live resizing: called on every drag or slider tick. `persist` writes the

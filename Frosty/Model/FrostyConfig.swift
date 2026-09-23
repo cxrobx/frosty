@@ -17,10 +17,20 @@ struct FrostyConfig: Codable, Equatable {
     var icons: [String: String] = [:]
     /// Collect running apps that aren't placed into one Open Apps group.
     var groupUnpinned: Bool = true
+    /// Show the badges apps put on their Dock icons (unread counts and the like).
+    var showBadges: Bool = true
+    /// Apps whose badge is hidden even while badges are on.
+    var hiddenBadges: Set<String> = []
 
     enum Item: Equatable {
         case app(String)
         case group(Group)
+    }
+
+    /// A tile on the bar, as named by a drag: an app (placed or not) or a group.
+    enum Ref: Equatable {
+        case app(String)
+        case group(String)
     }
 
     struct Group: Equatable {
@@ -35,7 +45,7 @@ struct FrostyConfig: Codable, Equatable {
         self.icons = icons
     }
 
-    private enum CodingKeys: String, CodingKey { case items, autoHide, iconSize, icons, groupUnpinned }
+    private enum CodingKeys: String, CodingKey { case items, autoHide, iconSize, icons, groupUnpinned, showBadges, hiddenBadges }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -44,6 +54,20 @@ struct FrostyConfig: Codable, Equatable {
         iconSize = Self.clampIconSize(try c.decodeIfPresent(Double.self, forKey: .iconSize) ?? 48)
         icons = try c.decodeIfPresent([String: String].self, forKey: .icons) ?? [:]
         groupUnpinned = try c.decodeIfPresent(Bool.self, forKey: .groupUnpinned) ?? true
+        showBadges = try c.decodeIfPresent(Bool.self, forKey: .showBadges) ?? true
+        hiddenBadges = Set(try c.decodeIfPresent([String].self, forKey: .hiddenBadges) ?? [])
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(items, forKey: .items)
+        try c.encode(autoHide, forKey: .autoHide)
+        try c.encode(iconSize, forKey: .iconSize)
+        try c.encode(icons, forKey: .icons)
+        try c.encode(groupUnpinned, forKey: .groupUnpinned)
+        try c.encode(showBadges, forKey: .showBadges)
+        // Sorted, so the file doesn't churn between saves.
+        try c.encode(hiddenBadges.sorted(), forKey: .hiddenBadges)
     }
 
     /// Same range as the real Dock's size slider.
@@ -142,12 +166,57 @@ extension FrostyConfig {
         items.replaceSubrange(gi...gi, with: g.apps.map { .app($0) })
     }
 
+    /// Drop a dragged tile next to another one. An app dropped beside an app
+    /// inside a group joins that group there; anything else lands on the top
+    /// level, which also pins an app that wasn't placed. Groups never nest, and
+    /// a target that isn't placed (a loose running app) leaves everything as is.
+    mutating func place(_ dragged: Ref, beside target: Ref, after: Bool) {
+        guard dragged != target else { return }
+        let saved = items
+        switch dragged {
+        case .group(let name):
+            guard let gi = groupIndex(named: name) else { return }
+            let group = items.remove(at: gi)
+            guard let ti = topLevelIndex(of: target) else { items = saved; return }
+            items.insert(group, at: after ? ti + 1 : ti)
+        case .app(let id):
+            if case .app(let targetID) = target, let name = groupName(containing: targetID) {
+                remove(id)
+                // The target is still in the group, so the group survived the removal.
+                guard let gi = groupIndex(named: name), case .group(var g) = items[gi],
+                      let ai = g.apps.firstIndex(of: targetID) else { items = saved; return }
+                g.apps.insert(id, at: after ? ai + 1 : ai)
+                items[gi] = .group(g)
+            } else {
+                remove(id)
+                guard let ti = topLevelIndex(of: target) else { items = saved; return }
+                items.insert(.app(id), at: after ? ti + 1 : ti)
+            }
+        }
+    }
+
+    mutating func toggleBadge(_ id: String) {
+        if hiddenBadges.remove(id) == nil { hiddenBadges.insert(id) }
+    }
+
     mutating func renameGroup(_ name: String, to newName: String) {
         let trimmed = newName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, groupIndex(named: trimmed) == nil,
               let gi = groupIndex(named: name), case .group(var g) = items[gi] else { return }
         g.name = trimmed
         items[gi] = .group(g)
+    }
+
+    private func topLevelIndex(of ref: Ref) -> Int? {
+        switch ref {
+        case .app(let id): return items.firstIndex(of: .app(id))
+        case .group(let name): return groupIndex(named: name)
+        }
+    }
+
+    private func groupName(containing id: String) -> String? {
+        for case .group(let g) in items where g.apps.contains(id) { return g.name }
+        return nil
     }
 
     private func groupIndex(named name: String) -> Int? {

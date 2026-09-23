@@ -55,6 +55,11 @@ final class BarController {
     var holdOpen = false {
         didSet { if holdOpen { setShown(true) } else { mouseMoved() } }
     }
+    /// Frosty's own menus being tracked (a submenu counts separately).
+    private var menusOpen = 0
+    /// An app's own Dock menu, opened by a right-click on its tile, is up.
+    private var dockMenuOpen = false
+    private var dockMenuTimer: Timer?
     private var hideWork: DispatchWorkItem?
     private var monitors: [Any] = []
     private var cancellables: Set<AnyCancellable> = []
@@ -79,6 +84,28 @@ final class BarController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] name in self?.showGroup(name) }
             .store(in: &cancellables)
+        // "Keep Frosty Open" can be switched from any tile's menu, not only the status menu.
+        model.$config
+            .map(\.autoHide)
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.layout(animated: true)
+                self?.mouseMoved()
+            }
+            .store(in: &cancellables)
+        // A tile's right-click menu hangs outside the bar; keep the bar up while it is open.
+        NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)
+            .sink { [weak self] _ in self?.menusOpen += 1; self?.setShown(true) }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.menusOpen = max(0, self.menusOpen - 1)
+                self.mouseMoved()
+            }
+            .store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .sink { [weak self] _ in self?.layout(animated: false) }
             .store(in: &cancellables)
@@ -89,6 +116,15 @@ final class BarController {
         }
         if let local = NSEvent.addLocalMonitorForEvents(matching: events, handler: { [weak self] e in self?.mouseMoved(); return e }) {
             monitors.append(local)
+        }
+        // A right-click (or Control-click) on a running app opens the app's own
+        // Dock menu, as in the real Dock. Holding Option gets Frosty's menu, and so
+        // does any tile the Dock has no menu for; the event then goes on to SwiftUI.
+        if let context = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown], handler: { [weak self] e in
+            guard let self else { return e }
+            return self.openDockMenu(for: e) ? nil : e
+        }) {
+            monitors.append(context)
         }
         // A global monitor only sees clicks in other apps: any of them closes the group.
         if let clicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown],
@@ -159,6 +195,29 @@ final class BarController {
                             display: true)
     }
 
+    private func openDockMenu(for event: NSEvent) -> Bool {
+        let flags = event.modifierFlags
+        let contextClick = event.type == .rightMouseDown || flags.contains(.control)
+        guard contextClick, !flags.contains(.option), let window = event.window,
+              let id = model.appTile(at: event.locationInWindow, in: window),
+              model.isRunning(id), RealDock.showMenu(id) else { return false }
+        watchDockMenu()
+        return true
+    }
+
+    /// The Dock's menu gives no sign when it closes, so look every quarter
+    /// second while it is up; `keepsBarOpen` holds the bar until then.
+    private func watchDockMenu() {
+        dockMenuTimer?.invalidate()
+        dockMenuOpen = true
+        dockMenuTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] timer in
+            guard let self, !RealDock.menuIsOpen else { return }
+            timer.invalidate()
+            self.dockMenuOpen = false
+            self.mouseMoved()
+        }
+    }
+
     private func setShown(_ value: Bool) {
         guard value != shown else { return }
         shown = value
@@ -191,9 +250,12 @@ final class BarController {
         }
     }
 
-    /// The pointer is over the bar (with some slack), or over an open group popover.
+    /// The pointer is over the bar (with some slack), or over an open group
+    /// popover, or a button is held: a drag of a tile must not lose its target.
     private func keepsBarOpen(_ p: NSPoint) -> Bool {
-        if holdOpen || panel.frame.insetBy(dx: -16, dy: -16).contains(p) { return true }
+        // Menus, Frosty's or the app's own Dock menu, hang outside the bar.
+        if holdOpen || menusOpen > 0 || dockMenuOpen || NSEvent.pressedMouseButtons != 0 { return true }
+        if panel.frame.insetBy(dx: -16, dy: -16).contains(p) { return true }
         // The gap between the bar and the group panel counts as inside.
         return groupPanel.isVisible && groupPanel.frame.union(panel.frame).insetBy(dx: -16, dy: -16).contains(p)
     }

@@ -77,17 +77,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let groupUnpinned = NSMenuItem(title: "Group Unpinned Apps", action: #selector(toggleGroupUnpinned), keyEquivalent: "")
         groupUnpinned.state = model.config.groupUnpinned ? .on : .off
 
+        let badges = NSMenuItem(title: "Show Badges", action: #selector(toggleBadges), keyEquivalent: "")
+        badges.state = model.config.showBadges ? .on : .off
+
         let sizeItem = NSMenuItem()
         sizeItem.view = iconSizeSliderView()
 
-        for item in [hideDock, autoHide, groupUnpinned,
+        var accessNote: [NSMenuItem] = []
+        if !RealDock.isTrusted {
+            // Badges and App Menu both read the real Dock through Accessibility.
+            accessNote = [NSMenuItem(title: "Allow Accessibility (for Badges and App Menus)…",
+                                     action: #selector(requestAccessibility), keyEquivalent: "")]
+        }
+
+        for item in [hideDock, autoHide, groupUnpinned, badges] + accessNote + [
                      .separator(),
                      sizeItem,
                      .separator(),
                      NSMenuItem(title: "Edit Config…", action: #selector(editConfig), keyEquivalent: ""),
                      NSMenuItem(title: "Reload Config", action: #selector(reloadConfig), keyEquivalent: ""),
                      .separator(),
-                     NSMenuItem(title: "Quit Frosty (restores the Dock)", action: #selector(quit), keyEquivalent: "q")] {
+                     NSMenuItem(title: "Quit Frosty (restores the Dock)", action: #selector(quit), keyEquivalent: "q")] as [NSMenuItem] {
             item.target = self
             menu.addItem(item)
         }
@@ -123,8 +133,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleAutoHide() {
         model.edit { $0.autoHide.toggle() }
-        bar.layout(animated: true)
     }
+
+    @objc private func toggleBadges() {
+        model.edit { $0.showBadges.toggle() }
+        if model.config.showBadges && !RealDock.isTrusted { RealDock.requestAccess() }
+    }
+
+    @objc private func requestAccessibility() { RealDock.requestAccess() }
 
     @objc private func toggleGroupUnpinned() {
         model.edit { $0.groupUnpinned.toggle() }
