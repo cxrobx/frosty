@@ -61,6 +61,14 @@ final class FrostyModel: ObservableObject {
         save()
     }
 
+    /// Live resizing: called on every drag or slider tick. `persist` writes the
+    /// config, so a drag saves once at the end instead of on every frame.
+    func setIconSize(_ size: Double, persist: Bool) {
+        let clamped = FrostyConfig.clampIconSize(size)
+        if clamped != config.iconSize { config.iconSize = clamped }
+        if persist { save() }
+    }
+
     func reload() {
         guard let data = try? Data(contentsOf: configURL) else { return }
         do {

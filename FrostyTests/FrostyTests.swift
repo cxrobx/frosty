@@ -102,6 +102,14 @@ final class ConfigEditTests: XCTestCase {
         XCTAssertEqual(plain.icons, [:])
     }
 
+    func testIconSizeIsClampedToTheDockRange() throws {
+        XCTAssertEqual(FrostyConfig.clampIconSize(4), 16)
+        XCTAssertEqual(FrostyConfig.clampIconSize(300), 128)
+        XCTAssertEqual(FrostyConfig.clampIconSize(63.6), 64)
+        let c = try JSONDecoder().decode(FrostyConfig.self, from: Data(#"{"items":[],"iconSize":2}"#.utf8))
+        XCTAssertEqual(c.iconSize, 16)
+    }
+
     func testMalformedItemIsRejected() {
         let json = #"{"items":[{"nope":1}]}"#
         XCTAssertThrowsError(try JSONDecoder().decode(FrostyConfig.self, from: Data(json.utf8)))

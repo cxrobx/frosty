@@ -37,7 +37,9 @@ Frosty and hide the Dock. It compiles `Frosty/Model/` directly instead.
 - **Right-click an app:** Hide · Quit · Keep in / Remove from Frosty · Move to Group
   (existing or New Group…) · Remove from group · Show in Finder.
 - **Right-click a group:** Rename… · Ungroup.
-- **Menu-bar ❄︎:** Hide the Real Dock · Auto-hide Frosty · Edit Config… · Reload
+- **Resize:** drag the divider up or down, as in the real Dock, or use the Icon
+  Size slider in the ❄︎ menu (the bar stays up while the menu is open). 16–128 pt.
+- **Menu-bar ❄︎:** Hide the Real Dock · Auto-hide Frosty · Icon Size · Edit Config… · Reload
   Config · Quit.
 
 ## Config

@@ -39,8 +39,15 @@ struct FrostyConfig: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         items = try c.decodeIfPresent([Item].self, forKey: .items) ?? []
         autoHide = try c.decodeIfPresent(Bool.self, forKey: .autoHide) ?? true
-        iconSize = try c.decodeIfPresent(Double.self, forKey: .iconSize) ?? 48
+        iconSize = Self.clampIconSize(try c.decodeIfPresent(Double.self, forKey: .iconSize) ?? 48)
         icons = try c.decodeIfPresent([String: String].self, forKey: .icons) ?? [:]
+    }
+
+    /// Same range as the real Dock's size slider.
+    static let iconSizeRange: ClosedRange<Double> = 16...128
+
+    static func clampIconSize(_ size: Double) -> Double {
+        min(max(size.rounded(), iconSizeRange.lowerBound), iconSizeRange.upperBound)
     }
 
     /// Every bundle id the user has placed, top level or inside a group.

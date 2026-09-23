@@ -63,6 +63,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
     }
 
+    // Keep the bar up while the menu is open, so the size slider is visible live.
+    func menuWillOpen(_ menu: NSMenu) { bar.holdOpen = true }
+    func menuDidClose(_ menu: NSMenu) { bar.holdOpen = false }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
@@ -71,7 +75,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let autoHide = NSMenuItem(title: "Auto-hide Frosty", action: #selector(toggleAutoHide), keyEquivalent: "")
         autoHide.state = model.config.autoHide ? .on : .off
 
+        let sizeItem = NSMenuItem()
+        sizeItem.view = iconSizeSliderView()
+
         for item in [hideDock, autoHide,
+                     .separator(),
+                     sizeItem,
                      .separator(),
                      NSMenuItem(title: "Edit Config…", action: #selector(editConfig), keyEquivalent: ""),
                      NSMenuItem(title: "Reload Config", action: #selector(reloadConfig), keyEquivalent: ""),
@@ -80,6 +89,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.target = self
             menu.addItem(item)
         }
+    }
+
+    private func iconSizeSliderView() -> NSView {
+        let label = NSTextField(labelWithString: "Icon Size")
+        label.font = .menuFont(ofSize: 0)
+        let slider = NSSlider(value: model.config.iconSize,
+                              minValue: FrostyConfig.iconSizeRange.lowerBound,
+                              maxValue: FrostyConfig.iconSizeRange.upperBound,
+                              target: self, action: #selector(iconSizeChanged))
+        slider.isContinuous = true
+        slider.controlSize = .small
+        let stack = NSStackView(views: [label, slider])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 4
+        stack.edgeInsets = NSEdgeInsets(top: 4, left: 14, bottom: 4, right: 14)
+        stack.frame = NSRect(x: 0, y: 0, width: 220, height: 48)
+        slider.widthAnchor.constraint(equalToConstant: 192).isActive = true
+        return stack
+    }
+
+    @objc private func iconSizeChanged(_ slider: NSSlider) {
+        let dragging = NSApp.currentEvent?.type == .leftMouseDragged
+        model.setIconSize(slider.doubleValue, persist: !dragging)
     }
 
     @objc private func toggleRealDock() {

@@ -14,11 +14,7 @@ struct BarView: View {
                 case .group(let name, let apps, let anyRunning):
                     GroupTile(model: model, name: name, apps: apps, anyRunning: anyRunning, size: size)
                 case .separator:
-                    Rectangle()
-                        .fill(.primary.opacity(0.25))
-                        .frame(width: 1, height: size * 0.8)
-                        .padding(.horizontal, 4)
-                        .padding(.top, size * 0.1)
+                    ResizeDivider(model: model, size: size)
                 }
             }
         }
@@ -26,6 +22,39 @@ struct BarView: View {
         .padding(.top, 6)
         .padding(.bottom, 2)
         .fixedSize()
+    }
+}
+
+/// The divider doubles as the size handle, as in the real Dock: drag it up to
+/// grow the icons, down to shrink them.
+private struct ResizeDivider: View {
+    @ObservedObject var model: FrostyModel
+    let size: CGFloat
+
+    /// Pointer height and icon size when the drag began. Measured in screen
+    /// coordinates, because the bar itself grows and moves under the pointer.
+    @State private var start: (mouseY: CGFloat, size: Double)?
+
+    var body: some View {
+        Rectangle()
+            .fill(.primary.opacity(0.25))
+            .frame(width: 1, height: size * 0.8)
+            .padding(.horizontal, 6)          // a wider grab area than the 1pt line
+            .padding(.top, size * 0.1)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
+            }
+            .gesture(DragGesture(minimumDistance: 1)
+                .onChanged { _ in
+                    let y = NSEvent.mouseLocation.y
+                    if start == nil { start = (y, model.config.iconSize) }
+                    if let start { model.setIconSize(start.size + Double(y - start.mouseY), persist: false) }
+                }
+                .onEnded { _ in
+                    start = nil
+                    model.setIconSize(model.config.iconSize, persist: true)
+                })
     }
 }
 

@@ -27,7 +27,17 @@ final class BarPanel: NSPanel {
 
 /// Clicks land on the first try even though the panel is never key.
 final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    /// Called once SwiftUI has re-rendered at a new size. Measuring on the
+    /// model's change notification instead reads the size from before the
+    /// re-render, leaving the window one step behind and clipped.
+    var onSizeChange: (() -> Void)?
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func invalidateIntrinsicContentSize() {
+        super.invalidateIntrinsicContentSize()
+        onSizeChange?()
+    }
 }
 
 /// Places the bar on the main display and slides it in and out.
@@ -41,6 +51,10 @@ final class BarController {
     private let groupPanel = BarPanel()
     private var groupHosting: FirstMouseHostingView<GroupGrid>?
     private var shown = false
+    /// Forces the bar up regardless of the pointer (the status menu is open).
+    var holdOpen = false {
+        didSet { if holdOpen { setShown(true) } else { mouseMoved() } }
+    }
     private var hideWork: DispatchWorkItem?
     private var monitors: [Any] = []
     private var cancellables: Set<AnyCancellable> = []
@@ -51,15 +65,15 @@ final class BarController {
     init(model: FrostyModel) {
         self.model = model
         hosting = FirstMouseHostingView(rootView: BarView(model: model))
+        hosting.sizingOptions = [.intrinsicContentSize]
 
         Self.frost(background, radius: cornerRadius)
         background.addSubview(hosting)
         panel.contentView = background
 
-        model.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.layout(animated: false) }
-            .store(in: &cancellables)
+        hosting.onSizeChange = { [weak self] in
+            DispatchQueue.main.async { self?.layout(animated: false) }
+        }
         model.$openGroup
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -171,7 +185,7 @@ final class BarController {
 
     /// The pointer is over the bar (with some slack), or over an open group popover.
     private func keepsBarOpen(_ p: NSPoint) -> Bool {
-        if panel.frame.insetBy(dx: -16, dy: -16).contains(p) { return true }
+        if holdOpen || panel.frame.insetBy(dx: -16, dy: -16).contains(p) { return true }
         // The gap between the bar and the group panel counts as inside.
         return groupPanel.isVisible && groupPanel.frame.union(panel.frame).insetBy(dx: -16, dy: -16).contains(p)
     }
