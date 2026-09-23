@@ -4,11 +4,17 @@ import Foundation
 ///
 ///     { "autoHide": true, "iconSize": 48,
 ///       "items": [ { "app": "com.apple.finder" },
-///                  { "group": "Music", "apps": ["com.image-line.flstudio", "com.cockos.reaper"] } ] }
+///                  { "group": "Music", "apps": ["com.image-line.flstudio", "com.cockos.reaper"] } ],
+///       "icons": { "md.obsidian": "~/Library/Application Support/obsidian/icon.png" } }
+///
+/// `icons` overrides an app's icon with an image file. It exists because an app
+/// that swaps its Dock icon at runtime (Obsidian's App icon setting) only tells
+/// the Dock; every public API still returns the icon inside the .app.
 struct FrostyConfig: Codable, Equatable {
     var items: [Item]
     var autoHide: Bool = true
     var iconSize: Double = 48
+    var icons: [String: String] = [:]
 
     enum Item: Equatable {
         case app(String)
@@ -20,19 +26,21 @@ struct FrostyConfig: Codable, Equatable {
         var apps: [String]
     }
 
-    init(items: [Item], autoHide: Bool = true, iconSize: Double = 48) {
+    init(items: [Item], autoHide: Bool = true, iconSize: Double = 48, icons: [String: String] = [:]) {
         self.items = items
         self.autoHide = autoHide
         self.iconSize = iconSize
+        self.icons = icons
     }
 
-    private enum CodingKeys: String, CodingKey { case items, autoHide, iconSize }
+    private enum CodingKeys: String, CodingKey { case items, autoHide, iconSize, icons }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         items = try c.decodeIfPresent([Item].self, forKey: .items) ?? []
         autoHide = try c.decodeIfPresent(Bool.self, forKey: .autoHide) ?? true
         iconSize = try c.decodeIfPresent(Double.self, forKey: .iconSize) ?? 48
+        icons = try c.decodeIfPresent([String: String].self, forKey: .icons) ?? [:]
     }
 
     /// Every bundle id the user has placed, top level or inside a group.

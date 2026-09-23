@@ -3,7 +3,9 @@ import Combine
 
 /// The bar's state: the saved config plus the live list of running apps.
 final class FrostyModel: ObservableObject {
-    @Published private(set) var config: FrostyConfig
+    @Published private(set) var config: FrostyConfig {
+        didSet { Apps.iconOverrides = config.icons }
+    }
     @Published private(set) var running: [String] = []
     /// The group whose app grid is open; keeps the bar from auto-hiding.
     @Published var openGroup: String?
@@ -24,6 +26,7 @@ final class FrostyModel: ObservableObject {
         } else {
             config = FrostyConfig(items: seed().map { .app($0) })
         }
+        Apps.iconOverrides = config.icons
         save()
         refreshRunning()
 

@@ -48,8 +48,14 @@ the real Dock's pinned apps:
 ```json
 { "autoHide": true, "iconSize": 48,
   "items": [ { "app": "com.apple.finder" },
-             { "group": "Tools", "apps": ["com.cx.onyx", "com.cxtasks.app"] } ] }
+             { "group": "Tools", "apps": ["com.cx.onyx", "com.cxtasks.app"] } ],
+  "icons": { "md.obsidian": "~/Library/Application Support/obsidian/icon.png" } }
 ```
+
+`icons` (optional) swaps an app's icon for any image file. Use it for apps that
+change their Dock icon at runtime, like Obsidian's *Appearance → App icon*: that
+swap reaches only the Dock, and every public API still returns the icon inside
+the `.app`.
 
 Edit it, then choose Reload Config. Reordering is done here for now; there is no
 drag-to-reorder yet.

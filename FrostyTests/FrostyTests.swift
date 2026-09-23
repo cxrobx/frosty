@@ -94,6 +94,14 @@ final class ConfigEditTests: XCTestCase {
         XCTAssertEqual(again, c)
     }
 
+    func testIconOverridesDecodeAndDefaultToEmpty() throws {
+        let json = #"{"items":[],"icons":{"md.obsidian":"~/icon.png"}}"#
+        let c = try JSONDecoder().decode(FrostyConfig.self, from: Data(json.utf8))
+        XCTAssertEqual(c.icons, ["md.obsidian": "~/icon.png"])
+        let plain = try JSONDecoder().decode(FrostyConfig.self, from: Data(#"{"items":[]}"#.utf8))
+        XCTAssertEqual(plain.icons, [:])
+    }
+
     func testMalformedItemIsRejected() {
         let json = #"{"items":[{"nope":1}]}"#
         XCTAssertThrowsError(try JSONDecoder().decode(FrostyConfig.self, from: Data(json.utf8)))

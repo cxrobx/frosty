@@ -3,6 +3,10 @@ import AppKit
 /// Looks up, launches and controls apps by bundle id.
 enum Apps {
     private static var iconCache: [String: NSImage] = [:]
+    /// Per-app icon files from the config (`~` allowed). Setting it clears the cache.
+    static var iconOverrides: [String: String] = [:] {
+        didSet { if iconOverrides != oldValue { iconCache.removeAll() } }
+    }
 
     static func url(_ id: String) -> URL? {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: id)
@@ -23,7 +27,10 @@ enum Apps {
     static func icon(_ id: String) -> NSImage {
         if let cached = iconCache[id] { return cached }
         let image: NSImage
-        if let url = url(id) {
+        if let path = iconOverrides[id],
+           let custom = NSImage(contentsOfFile: (path as NSString).expandingTildeInPath) {
+            image = custom
+        } else if let url = url(id) {
             image = NSWorkspace.shared.icon(forFile: url.path)
         } else if let icon = running(id)?.icon {
             image = icon
