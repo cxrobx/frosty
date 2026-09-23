@@ -15,6 +15,8 @@ struct FrostyConfig: Codable, Equatable {
     var autoHide: Bool = true
     var iconSize: Double = 48
     var icons: [String: String] = [:]
+    /// Collect running apps that aren't placed into one Open Apps group.
+    var groupUnpinned: Bool = true
 
     enum Item: Equatable {
         case app(String)
@@ -33,7 +35,7 @@ struct FrostyConfig: Codable, Equatable {
         self.icons = icons
     }
 
-    private enum CodingKeys: String, CodingKey { case items, autoHide, iconSize, icons }
+    private enum CodingKeys: String, CodingKey { case items, autoHide, iconSize, icons, groupUnpinned }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -41,6 +43,7 @@ struct FrostyConfig: Codable, Equatable {
         autoHide = try c.decodeIfPresent(Bool.self, forKey: .autoHide) ?? true
         iconSize = Self.clampIconSize(try c.decodeIfPresent(Double.self, forKey: .iconSize) ?? 48)
         icons = try c.decodeIfPresent([String: String].self, forKey: .icons) ?? [:]
+        groupUnpinned = try c.decodeIfPresent(Bool.self, forKey: .groupUnpinned) ?? true
     }
 
     /// Same range as the real Dock's size slider.

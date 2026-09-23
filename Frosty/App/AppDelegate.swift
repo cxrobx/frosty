@@ -74,11 +74,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hideDock.state = hider.isHidden ? .on : .off
         let autoHide = NSMenuItem(title: "Auto-hide Frosty", action: #selector(toggleAutoHide), keyEquivalent: "")
         autoHide.state = model.config.autoHide ? .on : .off
+        let groupUnpinned = NSMenuItem(title: "Group Unpinned Apps", action: #selector(toggleGroupUnpinned), keyEquivalent: "")
+        groupUnpinned.state = model.config.groupUnpinned ? .on : .off
 
         let sizeItem = NSMenuItem()
         sizeItem.view = iconSizeSliderView()
 
-        for item in [hideDock, autoHide,
+        for item in [hideDock, autoHide, groupUnpinned,
                      .separator(),
                      sizeItem,
                      .separator(),
@@ -122,6 +124,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleAutoHide() {
         model.edit { $0.autoHide.toggle() }
         bar.layout(animated: true)
+    }
+
+    @objc private func toggleGroupUnpinned() {
+        model.edit { $0.groupUnpinned.toggle() }
     }
 
     @objc private func editConfig() {

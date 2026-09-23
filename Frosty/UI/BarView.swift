@@ -13,6 +13,8 @@ struct BarView: View {
                     AppTile(model: model, id: id, running: running, placed: placed, group: nil, size: size)
                 case .group(let name, let apps, let anyRunning):
                     GroupTile(model: model, name: name, apps: apps, anyRunning: anyRunning, size: size)
+                case .openApps(let apps):
+                    GroupTile(model: model, name: BarEntry.openAppsKey, apps: apps, anyRunning: true, size: size)
                 case .separator:
                     ResizeDivider(model: model, size: size)
                 }
@@ -173,7 +175,7 @@ struct GroupTile: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(name)
+        .help(isOpenApps ? BarEntry.openAppsTitle : name)
         // Where the group panel should point; read by BarController, not rendered.
         .background(GeometryReader { geo in
             Color.clear
@@ -181,6 +183,17 @@ struct GroupTile: View {
                 .onChange(of: geo.frame(in: .global).midX) { _, x in model.groupTileMidX[name] = x }
         })
         .contextMenu {
+            if isOpenApps {
+                Button("Show Open Apps Separately") { model.edit { $0.groupUnpinned = false } }
+            } else {
+                userGroupMenu
+            }
+        }
+    }
+
+    private var isOpenApps: Bool { name == BarEntry.openAppsKey }
+
+    @ViewBuilder private var userGroupMenu: some View {
             Button("Rename…") {
                 if let newName = Prompt.text(title: "Rename group", message: "New name for “\(name)”:",
                                              initial: name, existing: model.config.groupNames) {
@@ -188,7 +201,6 @@ struct GroupTile: View {
                 }
             }
             Button("Ungroup") { model.edit { $0.ungroup(name) } }
-        }
     }
 }
 
@@ -229,19 +241,24 @@ struct GroupGrid: View {
     let name: String
 
     private var size: CGFloat { CGFloat(model.config.iconSize) }
+    private var isOpenApps: Bool { name == BarEntry.openAppsKey }
     private var apps: [String] {
+        if isOpenApps {
+            for case .openApps(let apps) in model.entries { return apps }
+            return []
+        }
         for case .group(let g) in model.config.items where g.name == name { return g.apps }
         return []
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(name).font(.headline)
+            Text(isOpenApps ? BarEntry.openAppsTitle : name).font(.headline)
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(size + 28), spacing: 8), count: min(4, max(1, apps.count))),
                       spacing: 10) {
                 ForEach(apps, id: \.self) { id in
-                    AppTile(model: model, id: id, running: model.isRunning(id), placed: true,
-                            group: name, size: size, showsName: true)
+                    AppTile(model: model, id: id, running: model.isRunning(id), placed: !isOpenApps,
+                            group: isOpenApps ? nil : name, size: size, showsName: true)
                 }
             }
         }

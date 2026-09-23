@@ -136,19 +136,27 @@ final class BarController {
             return
         }
         let grid = FirstMouseHostingView(rootView: GroupGrid(model: model, name: name))
-        let size = grid.fittingSize
-        grid.frame = NSRect(origin: .zero, size: size)
+        grid.sizingOptions = [.intrinsicContentSize]
+        grid.onSizeChange = { [weak self] in
+            DispatchQueue.main.async { self?.placeGroupPanel(name) }
+        }
         let effect = NSVisualEffectView()
         Self.frost(effect, radius: 14)
         effect.addSubview(grid)
         groupPanel.contentView = effect
         groupHosting = grid
+        placeGroupPanel(name)
+        groupPanel.orderFrontRegardless()
+    }
 
+    private func placeGroupPanel(_ name: String) {
+        guard let grid = groupHosting, model.openGroup == name, let screen else { return }
+        let size = grid.fittingSize
+        grid.frame = NSRect(origin: .zero, size: size)
         let tileX = panel.frame.minX + (model.groupTileMidX[name] ?? panel.frame.width / 2)
         let x = min(max(tileX - size.width / 2, screen.frame.minX + 8), screen.frame.maxX - size.width - 8)
         groupPanel.setFrame(NSRect(x: x.rounded(), y: panel.frame.maxY + 8, width: size.width, height: size.height),
                             display: true)
-        groupPanel.orderFrontRegardless()
     }
 
     private func setShown(_ value: Bool) {

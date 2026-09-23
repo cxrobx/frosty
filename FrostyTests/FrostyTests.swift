@@ -7,7 +7,19 @@ final class BarLayoutTests: XCTestCase {
         .app("safari"),
     ])
 
+    func testUnpinnedRunningAppsCollectIntoOpenApps() {
+        let entries = BarLayout.entries(config: config, running: ["finder", "slack", "zen", "slack"])
+        XCTAssertEqual(Array(entries.suffix(2)), [.separator, .openApps(apps: ["slack", "zen"])])
+    }
+
+    func testASingleUnpinnedAppStaysLoose() {
+        let entries = BarLayout.entries(config: config, running: ["slack"])
+        XCTAssertEqual(entries.last, .app(id: "slack", running: true, placed: false))
+    }
+
     func testPlacedFirstThenLooseRunningAfterSeparator() {
+        var config = config
+        config.groupUnpinned = false
         let entries = BarLayout.entries(config: config, running: ["finder", "slack", "zen"])
         XCTAssertEqual(entries, [
             .app(id: "finder", running: true, placed: true),
@@ -28,8 +40,7 @@ final class BarLayoutTests: XCTestCase {
 
     func testNoSeparatorWhenNothingIsPlaced() {
         let entries = BarLayout.entries(config: FrostyConfig(items: []), running: ["a", "a", "b"])
-        XCTAssertEqual(entries, [.app(id: "a", running: true, placed: false),
-                                 .app(id: "b", running: true, placed: false)])
+        XCTAssertEqual(entries, [.openApps(apps: ["a", "b"])])
     }
 }
 
@@ -89,6 +100,7 @@ final class ConfigEditTests: XCTestCase {
         let c = try JSONDecoder().decode(FrostyConfig.self, from: Data(json.utf8))
         XCTAssertEqual(c.items, [.app("com.apple.finder"), .group(.init(name: "Music", apps: ["a", "b"]))])
         XCTAssertTrue(c.autoHide)
+        XCTAssertTrue(c.groupUnpinned, "grouping is on unless the config turns it off")
         XCTAssertEqual(c.iconSize, 48)
         let again = try JSONDecoder().decode(FrostyConfig.self, from: JSONEncoder().encode(c))
         XCTAssertEqual(again, c)

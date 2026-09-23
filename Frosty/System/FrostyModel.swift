@@ -47,6 +47,11 @@ final class FrostyModel: ObservableObject {
             .filter { $0.activationPolicy == .regular }
             .compactMap(\.bundleIdentifier)
         if ids != running { running = ids }
+        // Close the Open Apps panel once there is no longer a group to show.
+        if openGroup == BarEntry.openAppsKey,
+           !entries.contains(where: { if case .openApps = $0 { return true } else { return false } }) {
+            openGroup = nil
+        }
     }
 
     func isRunning(_ id: String) -> Bool { running.contains(id) }

@@ -33,13 +33,15 @@ Frosty and hide the Dock. It compiles `Frosty/Model/` directly instead.
 ## Using it
 
 - **Bar:** placed apps in config order, then a separator, then running apps that
-  aren't placed. An app inside a group never appears loose; the group's dot lights up.
+  aren't placed. Two or more of those collect into one **Open Apps** group (turn
+  off with *Group Unpinned Apps* in the ❄︎ menu, or `"groupUnpinned": false`).
+  An app inside a group never appears loose; the group's dot lights up.
 - **Right-click an app:** Hide · Quit · Keep in / Remove from Frosty · Move to Group
   (existing or New Group…) · Remove from group · Show in Finder.
 - **Right-click a group:** Rename… · Ungroup.
 - **Resize:** drag the divider up or down, as in the real Dock, or use the Icon
   Size slider in the ❄︎ menu (the bar stays up while the menu is open). 16–128 pt.
-- **Menu-bar ❄︎:** Hide the Real Dock · Auto-hide Frosty · Icon Size · Edit Config… · Reload
+- **Menu-bar ❄︎:** Hide the Real Dock · Auto-hide Frosty · Group Unpinned Apps · Icon Size · Edit Config… · Reload
   Config · Quit.
 
 ## Config
