@@ -26,7 +26,10 @@ final class FrostyModel: ObservableObject {
     /// The tile being dragged, and where it would land if dropped now.
     var dragging: FrostyConfig.Ref?
     var dragToken: String?
-    @Published var dropHint: DropHint?
+    @Published var dropHint: DropHint? {
+        didSet { if dropHint != nil { clearDropHintWhenReleased() } }
+    }
+    private var releaseWatch: Timer?
     /// The group whose app grid is open; keeps the bar from auto-hiding.
     @Published var openGroup: String?
     /// Horizontal centre of each group tile, in bar coordinates. Plain storage,
@@ -92,6 +95,22 @@ final class FrostyModel: ObservableObject {
                 self.badges = latest
             }
         }
+    }
+
+    /// SwiftUI doesn't always report that a drag left a tile (seen on macOS 26
+    /// when a drag ended off every target), which left the drop marker stuck.
+    /// So the marker also goes as soon as no mouse button is held. The timer
+    /// runs in the common modes, so it also ticks inside the drag's own loop.
+    private func clearDropHintWhenReleased() {
+        guard releaseWatch == nil else { return }
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] timer in
+            guard NSEvent.pressedMouseButtons == 0 else { return }
+            timer.invalidate()
+            self?.releaseWatch = nil
+            self?.dropHint = nil
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        releaseWatch = timer
     }
 
     /// The badge to draw on an app's tile, honouring both badge settings.
