@@ -6,6 +6,26 @@ the menu bar tidy. Swift/AppKit + SwiftUI, macOS 14+, no special permissions.
 It hides the real Dock by setting it to auto-hide with a 1000-second reveal delay,
 then draws its own bar at the bottom of the main display.
 
+![Frosty's bar: pinned apps, a divider, and the Open Apps group](docs/bar.png)
+
+## Requirements and install
+
+macOS 14 (Sonoma) or later, Xcode 16+, and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+(`brew install xcodegen`). There is no prebuilt release yet; build it:
+
+```sh
+git clone https://github.com/cxrobx/frosty.git && cd frosty
+xcodegen generate
+xcodebuild -project Frosty.xcodeproj -scheme Frosty -configuration Release -derivedDataPath build build
+cp -R build/Build/Products/Release/Frosty.app /Applications/
+open /Applications/Frosty.app
+```
+
+The build is ad-hoc signed, so the first launch may need right-click → Open.
+
+**Known limit:** App Exposé and Mission Control always bring the real Dock up.
+That is macOS, not a setting; every Dock replacement shares it.
+
 ## If the Dock ever stays hidden
 
 Quitting Frosty from its ❄︎ menu-bar icon, `kill`, Ctrl-C and logging out all put
@@ -15,9 +35,9 @@ next launch-and-quit. To bring the Dock back by hand:
 
 ```sh
 defaults delete com.apple.dock autohide-delay; killall Dock
+# and, if your Dock did not auto-hide before Frosty:
+defaults write com.apple.dock autohide -bool false; killall Dock
 ```
-
-(This leaves auto-hide on, which is how this Mac had it before Frosty.)
 
 ## Build, test, run
 
@@ -52,7 +72,7 @@ the real Dock's pinned apps:
 ```json
 { "autoHide": true, "iconSize": 48,
   "items": [ { "app": "com.apple.finder" },
-             { "group": "Tools", "apps": ["com.cx.onyx", "com.cxtasks.app"] } ],
+             { "group": "Notes", "apps": ["com.apple.Notes", "md.obsidian"] } ],
   "icons": { "md.obsidian": "~/Library/Application Support/obsidian/icon.png" } }
 ```
 
@@ -77,3 +97,7 @@ drag-to-reorder yet.
 Main display only · no drag-and-drop onto icons · no badges · no window previews ·
 no launch at login. Minimize, Mission Control and Cmd-Tab still use Apple's hidden
 Dock, which no third-party bar can take over.
+
+## License
+
+[MIT](LICENSE)

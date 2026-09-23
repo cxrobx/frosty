@@ -130,7 +130,7 @@ final class BarController {
     }
 
     private func showGroup(_ name: String?) {
-        guard let name, shown, let screen else {
+        guard let name, shown, screen != nil else {
             groupPanel.orderOut(nil)
             groupHosting = nil
             return
