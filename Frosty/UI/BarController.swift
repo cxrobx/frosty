@@ -76,9 +76,18 @@ final class BarController {
         background.addSubview(hosting)
         panel.contentView = background
 
-        hosting.onSizeChange = { [weak self] in
-            DispatchQueue.main.async { self?.layout(animated: false) }
-        }
+        // Refit after any model change: tiles, badges or icon size. The
+        // hosting view never calls `invalidateIntrinsicContentSize` for a
+        // content change, so waiting on it left the window at its old size
+        // through a resize. `receive(on:)` runs after the change has landed.
+        model.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                // Only a real size change: a relayout mid-slide would cut the animation short.
+                guard let self, self.hosting.fittingSize != self.hosting.frame.size else { return }
+                self.layout(animated: false)
+            }
+            .store(in: &cancellables)
         model.$openGroup
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
