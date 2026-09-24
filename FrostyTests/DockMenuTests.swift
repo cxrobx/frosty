@@ -68,4 +68,16 @@ final class DockMenuTests: XCTestCase {
         XCTAssertNil(DockMenu.local(["Evals that hold up"]))
         XCTAssertNil(DockMenu.local(["Show All Windows"]))
     }
+
+    func testStoreRoundTripsAndSurvivesABadFile() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString).appendingPathComponent("dock-menus.json")
+        let store = DockMenuStore(url: url)
+        XCTAssertEqual(store.load(), [:])
+        let menus = ["com.onyx": DockMenu.items(from: onyx)]
+        store.save(menus)
+        XCTAssertEqual(store.load(), menus)
+        try Data("not json".utf8).write(to: url)
+        XCTAssertEqual(store.load(), [:])
+    }
 }

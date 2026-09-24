@@ -52,8 +52,11 @@ final class BarController {
     private var dockMenuTimer: Timer?
     /// Each app's Dock menu, copied the first time the Dock shows it, so from
     /// then on Frosty draws it over its own tile. Refreshed on every pick that
-    /// goes through the Dock.
-    private var dockMenus: [String: [DockMenuItem]] = [:]
+    /// goes through the Dock, and saved across restarts.
+    private var dockMenus: [String: [DockMenuItem]] {
+        didSet { if dockMenus != oldValue { dockMenuStore.save(dockMenus) } }
+    }
+    private let dockMenuStore: DockMenuStore
     private var hideWork: DispatchWorkItem?
     private var monitors: [Any] = []
     private var cancellables: Set<AnyCancellable> = []
@@ -63,6 +66,9 @@ final class BarController {
 
     init(model: FrostyModel) {
         self.model = model
+        dockMenuStore = DockMenuStore(url: model.configURL.deletingLastPathComponent()
+            .appendingPathComponent("dock-menus.json"))
+        dockMenus = dockMenuStore.load()
         hosting = FirstMouseHostingView(rootView: BarView(model: model))
         hosting.sizingOptions = [.intrinsicContentSize]
 

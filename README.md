@@ -70,8 +70,10 @@ Frosty and hide the Dock. It compiles `Frosty/Model/` directly instead.
   An app inside a group never appears loose; the group's dot lights up.
 - **Right-click a running app:** the app's own Dock menu (New Message, recent files,
   Options…), over its tile. macOS only opens that menu over the hidden real Dock's
-  icon, so the first right-click on each app after Frosty starts opens it there
-  and Frosty keeps a copy to draw itself from then on. Picking an app-specific
+  icon, so the first right-click on each app opens it there and Frosty keeps a
+  copy (saved across restarts) to draw itself from then on. The copy updates
+  only when you pick one of the app's own items, so a window list or recent
+  files can be out of date until then. Picking an app-specific
   item flashes the real menu at the bottom of the screen for a moment.
 - **Option-right-click an app** (or right-click one that isn't running): Hide · Quit ·
   Keep in / Remove from Frosty · Move to Group (existing or New Group…) · Remove

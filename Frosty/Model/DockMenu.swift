@@ -1,11 +1,12 @@
 import CoreGraphics
+import Foundation
 
 /// An app's own Dock menu, copied out of the real Dock so Frosty can draw it
 /// over its own tile. The Dock only ever opens the menu over its hidden icon,
 /// and the menu can't be moved (its position reports settable = false, and a
 /// write is accepted but ignored), so Frosty draws a copy instead.
-struct DockMenuItem: Equatable {
-    enum Kind: Equatable { case action, header, separator }
+struct DockMenuItem: Equatable, Codable {
+    enum Kind: String, Equatable, Codable { case action, header, separator }
 
     var kind: Kind
     var title: String
@@ -15,7 +16,7 @@ struct DockMenuItem: Equatable {
     var alternate: Modifiers?
     var children: [DockMenuItem] = []
 
-    struct Modifiers: OptionSet, Equatable {
+    struct Modifiers: OptionSet, Equatable, Codable {
         let rawValue: Int
         static let shift = Modifiers(rawValue: 1)
         static let option = Modifiers(rawValue: 2)
@@ -98,5 +99,24 @@ enum DockMenu {
             if depth < path.count - 1 { level = level[i].children }
         }
         return result
+    }
+}
+
+/// The copied menus, kept on disk so a restart of Frosty doesn't send every
+/// app's first right-click back to the hidden Dock. An unreadable file is
+/// treated as empty: the copies are rebuilt one right-click at a time.
+struct DockMenuStore {
+    let url: URL
+
+    func load() -> [String: [DockMenuItem]] {
+        guard let data = try? Data(contentsOf: url),
+              let menus = try? JSONDecoder().decode([String: [DockMenuItem]].self, from: data) else { return [:] }
+        return menus
+    }
+
+    func save(_ menus: [String: [DockMenuItem]]) {
+        guard let data = try? JSONEncoder().encode(menus) else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? data.write(to: url, options: .atomic)
     }
 }
