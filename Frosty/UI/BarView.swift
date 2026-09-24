@@ -294,21 +294,30 @@ struct GroupGrid: View {
     }
 }
 
-/// A Dock-style count in the icon's top-right corner.
+/// A Dock-style count in the icon's top-right corner. Proportions and colors
+/// are measured off the real Dock: a circle until the label outgrows it, light
+/// text, and a red that stays the same in dark mode.
 private struct BadgeView: View {
     let text: String?
     let size: CGFloat
 
+    private static let top = Color(red: 0.90, green: 0.36, blue: 0.27)
+    private static let bottom = Color(red: 0.85, green: 0.29, blue: 0.23)
+
     var body: some View {
         if let text {
+            let diameter = max(14, size * 0.38)
             Text(text)
-                .font(.system(size: max(9, size * 0.24), weight: .semibold))
+                .font(.system(size: diameter * 0.52, weight: .regular))
+                .monospacedDigit()
                 .foregroundStyle(.white)
                 .lineLimit(1)
-                .padding(.horizontal, size * 0.08)
-                .frame(minWidth: size * 0.36, minHeight: size * 0.36)
-                .background(Capsule().fill(Color.red))
-                .offset(x: size * 0.08)
+                .padding(.horizontal, text.count > 2 ? diameter * 0.22 : 0)
+                .frame(minWidth: diameter, minHeight: diameter, maxHeight: diameter)
+                .background(Capsule().fill(LinearGradient(colors: [Self.top, Self.bottom],
+                                                          startPoint: .top, endPoint: .bottom)))
+                .shadow(color: .black.opacity(0.3), radius: 1, y: 0.5)
+                .offset(x: size * 0.04)
                 .allowsHitTesting(false)
         }
     }
