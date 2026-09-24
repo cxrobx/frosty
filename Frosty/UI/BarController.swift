@@ -254,9 +254,11 @@ final class BarController {
         }
     }
 
-    /// The copied Dock menu, centred above the tile like the real one.
+    /// The copied Dock menu, centred above the tile like the real one. The
+    /// tile's own window, not the bar's: a tile in an open group sits in the
+    /// group panel, and measuring it against the bar put its menu far off.
     private func popUpDockMenu(_ items: [DockMenuItem], for id: String, over tile: NSView) {
-        guard let view = panel.contentView else { return }
+        guard let view = tile.window?.contentView else { return }
         let target = DockMenuTarget { [weak self] path in self?.perform(path, for: id) }
         let menu = NSMenu()
         menu.autoenablesItems = false
