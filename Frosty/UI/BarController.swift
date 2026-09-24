@@ -215,13 +215,14 @@ final class BarController {
         return true
     }
 
-    /// The Dock's menu gives no sign when it closes, so look every quarter
-    /// second while it is up; `keepsBarOpen` holds the bar until then. The
-    /// first look also copies the menu for next time.
+    /// The Dock's menu gives no sign when it closes, so look every 50 ms
+    /// while it is up; `keepsBarOpen` holds the bar until then. The first look
+    /// that finds it also copies it for next time, early enough that a menu
+    /// closed at once is still copied.
     private func watchDockMenu(_ id: String) {
         dockMenuTimer?.invalidate()
         dockMenuOpen = true
-        dockMenuTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] timer in
+        dockMenuTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] timer in
             guard let self else { return }
             if self.dockMenus[id] == nil, let raw = RealDock.openMenuItems() {
                 self.dockMenus[id] = DockMenu.items(from: raw)
