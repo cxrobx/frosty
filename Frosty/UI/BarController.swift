@@ -216,8 +216,22 @@ final class BarController {
             DispatchQueue.main.async { self.popUpDockMenu(items, for: id, over: tile) }
             return true
         }
-        guard RealDock.showMenu(id) else { return false }
-        watchDockMenu(id)
+        guard RealDock.hasItem(id) else { return false }
+        // No copy yet: take one, closing the Dock's menu at once, and draw it
+        // here. If the copy fails, the Dock's own menu opens where it always has.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let raw = RealDock.copyMenu(id)
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                if let raw, !raw.isEmpty {
+                    let items = DockMenu.items(from: raw)
+                    self.dockMenus[id] = items
+                    self.popUpDockMenu(items, for: id, over: tile)
+                } else if RealDock.showMenu(id) {
+                    self.watchDockMenu(id)
+                }
+            }
+        }
         return true
     }
 

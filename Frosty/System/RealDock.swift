@@ -37,14 +37,7 @@ enum RealDock {
     /// closed submenu's items can be pressed directly. Blocks for up to a
     /// second, so call it off the main thread.
     static func pick(_ id: String, path: [String]) -> (picked: Bool, items: [RawDockMenuItem]?) {
-        guard let item = openMenu(id) else { return (false, nil) }
-        var menu: AXUIElement?
-        for _ in 0..<100 {
-            menu = self.menu(of: item)
-            if menu != nil { break }
-            usleep(10_000)
-        }
-        guard let menu else { return (false, nil) }
+        guard let menu = openAndWait(id) else { return (false, nil) }
         let tree = nodes(menu)
         let items = tree.map(\.raw)
         guard let indices = DockMenu.indexPath(of: path, in: items) else {
@@ -60,17 +53,46 @@ enum RealDock {
         return (AXUIElementPerformAction(target.element, kAXPressAction as CFString) == .success, items)
     }
 
+    /// Copies the app's Dock menu without leaving it up: opens it, reads it
+    /// and closes it straight away, so it only flashes at the bottom of the
+    /// screen. Used the first time an app is right-clicked, so even that menu
+    /// opens over Frosty's tile. Blocks for up to a second, so call it off the
+    /// main thread.
+    static func copyMenu(_ id: String) -> [RawDockMenuItem]? {
+        guard let menu = openAndWait(id) else { return nil }
+        let items = nodes(menu).map(\.raw)
+        AXUIElementPerformAction(menu, kAXCancelAction as CFString)
+        return items
+    }
+
+    /// Whether the Dock has an icon for the app, so it has a menu to copy.
+    static func hasItem(_ id: String) -> Bool { isTrusted && item(id) != nil }
+
+    /// Opens the app's Dock menu and waits for it to appear, which takes
+    /// anywhere from 50 to 350 ms.
+    private static func openAndWait(_ id: String) -> AXUIElement? {
+        guard let item = openMenu(id) else { return nil }
+        for _ in 0..<100 {
+            if let menu = self.menu(of: item) { return menu }
+            usleep(10_000)
+        }
+        return nil
+    }
+
     /// Asks the Dock to open the app's menu over its hidden icon.
     private static func openMenu(_ id: String) -> AXUIElement? {
-        guard isTrusted else { return nil }
+        guard isTrusted, let item = item(id),
+              AXUIElementPerformAction(item, kAXShowMenuAction as CFString) == .success else { return nil }
+        return item
+    }
+
+    private static func item(_ id: String) -> AXUIElement? {
         let items = appItems()
         let path = (Apps.url(id) ?? Apps.running(id)?.bundleURL)?.resolvingSymlinksInPath().path
         let name = Apps.name(id)
         // Matched on the app's location, falling back to its name for items that report no URL.
-        guard let item = items.first(where: { path != nil && $0.url?.resolvingSymlinksInPath().path == path })
-                ?? items.first(where: { $0.title == name }),
-              AXUIElementPerformAction(item.element, kAXShowMenuAction as CFString) == .success else { return nil }
-        return item.element
+        return (items.first(where: { path != nil && $0.url?.resolvingSymlinksInPath().path == path })
+                ?? items.first(where: { $0.title == name }))?.element
     }
 
     /// The Dock icon whose menu `showMenu` last opened.
