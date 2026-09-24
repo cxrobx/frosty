@@ -67,6 +67,7 @@ final class DockMenuTests: XCTestCase {
         XCTAssertEqual(DockMenu.local(["Options", "Show in Finder"]), .showInFinder)
         XCTAssertNil(DockMenu.local(["Evals that hold up"]))
         XCTAssertNil(DockMenu.local(["Show All Windows"]))
+        XCTAssertEqual(DockMenu.local(["Show"]), .show)
     }
 
     func testStoreRoundTripsAndSurvivesABadFile() throws {
@@ -74,10 +75,21 @@ final class DockMenuTests: XCTestCase {
             .appendingPathComponent(UUID().uuidString).appendingPathComponent("dock-menus.json")
         let store = DockMenuStore(url: url)
         XCTAssertEqual(store.load(), [:])
-        let menus = ["com.onyx": DockMenu.items(from: onyx)]
+        let menus = ["com.onyx": DockMenuCopy(pid: 42, items: DockMenu.items(from: onyx))]
         store.save(menus)
         XCTAssertEqual(store.load(), menus)
         try Data("not json".utf8).write(to: url)
         XCTAssertEqual(store.load(), [:])
+    }
+
+    func testHideOrShowFollowsTheAppNotTheCopy() {
+        let copied = DockMenu.items(from: onyx)   // taken while Onyx was showing
+        let hidden = DockMenu.matching(hidden: true, copied)
+        XCTAssertTrue(hidden.contains { $0.title == "Show" })
+        XCTAssertFalse(hidden.contains { $0.title == "Hide" })
+        // The alternate and every other item are left alone.
+        XCTAssertTrue(hidden.contains { $0.title == "Hide Others" })
+        XCTAssertEqual(hidden.count, copied.count)
+        XCTAssertEqual(DockMenu.matching(hidden: false, hidden), copied)
     }
 }

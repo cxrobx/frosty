@@ -41,15 +41,27 @@ enum DockMenu {
     /// Titles of the items Frosty runs itself, with no trip through the Dock
     /// menu. English titles only: in another language every item goes through
     /// the Dock, which still works, with the brief flash.
-    enum Local: Equatable { case hide, quit, forceQuit, showInFinder }
+    enum Local: Equatable { case hide, show, quit, forceQuit, showInFinder }
 
     static func local(_ path: [String]) -> Local? {
         switch path {
         case ["Hide"]: return .hide
+        case ["Show"]: return .show
         case ["Quit"]: return .quit
         case ["Force Quit"]: return .forceQuit
         case ["Options", "Show in Finder"]: return .showInFinder
         default: return nil
+        }
+    }
+
+    /// The Dock offers Show for a hidden app and Hide otherwise. A copy keeps
+    /// whichever it was taken with, so set it from the app's state right now.
+    static func matching(hidden: Bool, _ items: [DockMenuItem]) -> [DockMenuItem] {
+        items.map { item in
+            guard item.alternate == nil, item.title == "Hide" || item.title == "Show" else { return item }
+            var item = item
+            item.title = hidden ? "Show" : "Hide"
+            return item
         }
     }
 
@@ -102,19 +114,27 @@ enum DockMenu {
     }
 }
 
+/// A copied menu and the process it was copied from. A relaunch (an update,
+/// say) can change the app's menu, so a copy from an earlier process is not
+/// used; the next right-click takes a fresh one.
+struct DockMenuCopy: Equatable, Codable {
+    var pid: Int32
+    var items: [DockMenuItem]
+}
+
 /// The copied menus, kept on disk so a restart of Frosty doesn't send every
 /// app's first right-click back to the hidden Dock. An unreadable file is
 /// treated as empty: the copies are rebuilt one right-click at a time.
 struct DockMenuStore {
     let url: URL
 
-    func load() -> [String: [DockMenuItem]] {
+    func load() -> [String: DockMenuCopy] {
         guard let data = try? Data(contentsOf: url),
-              let menus = try? JSONDecoder().decode([String: [DockMenuItem]].self, from: data) else { return [:] }
+              let menus = try? JSONDecoder().decode([String: DockMenuCopy].self, from: data) else { return [:] }
         return menus
     }
 
-    func save(_ menus: [String: [DockMenuItem]]) {
+    func save(_ menus: [String: DockMenuCopy]) {
         guard let data = try? JSONEncoder().encode(menus) else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: url, options: .atomic)

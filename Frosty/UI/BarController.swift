@@ -53,7 +53,7 @@ final class BarController {
     /// Each app's Dock menu, copied the first time the Dock shows it, so from
     /// then on Frosty draws it over its own tile. Refreshed on every pick that
     /// goes through the Dock, and saved across restarts.
-    private var dockMenus: [String: [DockMenuItem]] {
+    private var dockMenus: [String: DockMenuCopy] {
         didSet { if dockMenus != oldValue { dockMenuStore.save(dockMenus) } }
     }
     private let dockMenuStore: DockMenuStore
@@ -211,9 +211,9 @@ final class BarController {
               let tile = model.appTile(at: event.locationInWindow, in: window),
               model.isRunning(tile.appID) else { return false }
         let id = tile.appID
-        if let items = dockMenus[id] {
+        if let copy = dockMenus[id], copy.pid == Apps.running(id)?.processIdentifier {
             // Out of the event monitor first: the menu runs its own tracking loop.
-            DispatchQueue.main.async { self.popUpDockMenu(items, for: id, over: tile) }
+            DispatchQueue.main.async { self.popUpDockMenu(copy.items, for: id, over: tile) }
             return true
         }
         guard RealDock.hasItem(id) else { return false }
@@ -224,9 +224,7 @@ final class BarController {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 if let raw, !raw.isEmpty {
-                    let items = DockMenu.items(from: raw)
-                    self.dockMenus[id] = items
-                    self.popUpDockMenu(items, for: id, over: tile)
+                    self.popUpDockMenu(self.remember(raw, for: id), for: id, over: tile)
                 } else if RealDock.showMenu(id) {
                     self.watchDockMenu(id)
                 }
@@ -244,8 +242,8 @@ final class BarController {
         dockMenuOpen = true
         dockMenuTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] timer in
             guard let self else { return }
-            if self.dockMenus[id] == nil, let raw = RealDock.openMenuItems() {
-                self.dockMenus[id] = DockMenu.items(from: raw)
+            if self.dockMenus[id]?.pid != Apps.running(id)?.processIdentifier, let raw = RealDock.openMenuItems() {
+                self.remember(raw, for: id)
             }
             guard !RealDock.menuIsOpen else { return }
             timer.invalidate()
@@ -254,11 +252,20 @@ final class BarController {
         }
     }
 
+    /// Keeps a fresh copy of the app's menu, tagged with the process it came from.
+    @discardableResult
+    private func remember(_ raw: [RawDockMenuItem], for id: String) -> [DockMenuItem] {
+        let items = DockMenu.items(from: raw)
+        if let pid = Apps.running(id)?.processIdentifier { dockMenus[id] = DockMenuCopy(pid: pid, items: items) }
+        return items
+    }
+
     /// The copied Dock menu, centred above the tile like the real one. The
     /// tile's own window, not the bar's: a tile in an open group sits in the
     /// group panel, and measuring it against the bar put its menu far off.
     private func popUpDockMenu(_ items: [DockMenuItem], for id: String, over tile: NSView) {
         guard let view = tile.window?.contentView else { return }
+        let items = DockMenu.matching(hidden: Apps.running(id)?.isHidden ?? false, items)
         let target = DockMenuTarget { [weak self] path in self?.perform(path, for: id) }
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -314,6 +321,7 @@ final class BarController {
     private func perform(_ path: [String], for id: String) {
         switch DockMenu.local(path) {
         case .hide: Apps.hide(id)
+        case .show: Apps.running(id)?.unhide()
         case .quit: Apps.quit(id)
         case .forceQuit: Apps.running(id)?.forceTerminate()
         case .showInFinder: Apps.revealInFinder(id)
@@ -321,7 +329,7 @@ final class BarController {
             DispatchQueue.global(qos: .userInitiated).async {
                 let result = RealDock.pick(id, path: path)
                 DispatchQueue.main.async { [weak self] in
-                    if let raw = result.items { self?.dockMenus[id] = DockMenu.items(from: raw) }
+                    if let raw = result.items { self?.remember(raw, for: id) }
                     if !result.picked { NSSound.beep() }
                 }
             }
