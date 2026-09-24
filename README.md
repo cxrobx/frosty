@@ -73,7 +73,11 @@ Frosty and hide the Dock. It compiles `Frosty/Model/` directly instead.
   icon, so the first time you right-click an app Frosty opens it there for a
   moment, copies it and closes it, then draws its copy (saved across restarts). The copy updates
   only when you pick one of the app's own items, so a window list or recent
-  files can be out of date until then. Picking an app-specific
+  files can be out of date until then.
+  **Always-Fresh App Menus** (❄︎ menu, off by default) takes a fresh copy on every
+  right-click instead, hiding the real menu under a still of the screen for about
+  a third of a second. It needs Screen Recording, and the menu opens ~150 ms after
+  the click rather than at once. Picking an app-specific
   item flashes the real menu at the bottom of the screen for a moment.
 - **Option-right-click an app** (or right-click one that isn't running): Hide · Quit ·
   Keep in / Remove from Frosty · Move to Group (existing or New Group…) · Remove

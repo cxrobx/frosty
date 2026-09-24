@@ -211,6 +211,39 @@ final class BarController {
               let tile = model.appTile(at: event.locationInWindow, in: window),
               model.isRunning(tile.appID) else { return false }
         let id = tile.appID
+        if model.config.freshDockMenus, FlashCover.isAvailable, let icon = RealDock.itemFrame(id) {
+            DispatchQueue.main.async { self.openFreshDockMenu(id, over: tile, dockIcon: icon) }
+            return true
+        }
+        return openCopiedDockMenu(id, over: tile)
+    }
+
+    /// Always-Fresh App Menus: copy the menu now, with the Dock's flash hidden
+    /// under `FlashCover`, and draw it at the tile.
+    private func openFreshDockMenu(_ id: String, over tile: NSView, dockIcon: CGRect) {
+        guard let screen else { return }
+        // The Dock opens the menu above its hidden icon. A menu listing long
+        // window titles runs about 900 pt wide, so cover 500 pt either side.
+        let rect = NSRect(x: dockIcon.midX - 500, y: screen.frame.minY, width: 1000, height: screen.frame.height * 0.75)
+        FlashCover.cover(rect) { [weak self] cover in
+            guard let self else { cover?.orderOut(nil); return }
+            guard let cover else { _ = self.openCopiedDockMenu(id, over: tile); return }
+            DispatchQueue.global(qos: .userInitiated).async {
+                let raw = RealDock.copyMenu(id)
+                DispatchQueue.main.async {
+                    // Common modes: our menu's tracking loop is running by the time it fires.
+                    let lift = Timer(timeInterval: FlashCover.fadeOut, repeats: false) { _ in cover.orderOut(nil) }
+                    RunLoop.main.add(lift, forMode: .common)
+                    let items = raw.flatMap { $0.isEmpty ? nil : self.remember($0, for: id) } ?? self.dockMenus[id]?.items
+                    if let items { self.popUpDockMenu(items, for: id, over: tile, aboveCover: true) }
+                }
+            }
+        }
+    }
+
+    /// The copy Frosty already has, or a first copy taken with the Dock's
+    /// menu flashing up for a moment.
+    private func openCopiedDockMenu(_ id: String, over tile: NSView) -> Bool {
         if let copy = dockMenus[id], copy.pid == Apps.running(id)?.processIdentifier {
             // Out of the event monitor first: the menu runs its own tracking loop.
             DispatchQueue.main.async { self.popUpDockMenu(copy.items, for: id, over: tile) }
@@ -263,7 +296,7 @@ final class BarController {
     /// The copied Dock menu, centred above the tile like the real one. The
     /// tile's own window, not the bar's: a tile in an open group sits in the
     /// group panel, and measuring it against the bar put its menu far off.
-    private func popUpDockMenu(_ items: [DockMenuItem], for id: String, over tile: NSView) {
+    private func popUpDockMenu(_ items: [DockMenuItem], for id: String, over tile: NSView, aboveCover: Bool = false) {
         guard let view = tile.window?.contentView else { return }
         let items = DockMenu.matching(hidden: Apps.running(id)?.isHidden ?? false, items)
         let target = DockMenuTarget { [weak self] path in self?.perform(path, for: id) }
@@ -275,9 +308,15 @@ final class BarController {
         // measure a copy without them.
         let measure = NSMenu()
         Self.fill(measure, with: items.filter { $0.alternate == nil }, path: [], target: target)
+        if aboveCover { Self.liftWhenOpen(menu) }
         let tileRect = tile.convert(tile.bounds, to: view)
         let point = NSPoint(x: tileRect.midX - menu.size.width / 2, y: view.bounds.maxY + 6 + measure.size.height)
         withExtendedLifetime(target) { _ = menu.popUp(positioning: nil, at: point, in: view) }
+    }
+
+    private static func liftWhenOpen(_ menu: NSMenu) {
+        menu.delegate = MenuLifter.shared
+        for item in menu.items { if let submenu = item.submenu { liftWhenOpen(submenu) } }
     }
 
     private static func fill(_ menu: NSMenu, with items: [DockMenuItem], path: [String], target: DockMenuTarget) {
@@ -395,6 +434,16 @@ final class BarController {
         image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
         image.resizingMode = .stretch
         return image
+    }
+}
+
+/// Lifts a menu, and any submenu it opens, above `FlashCover` as it opens.
+private final class MenuLifter: NSObject, NSMenuDelegate {
+    static let shared = MenuLifter()
+    func menuWillOpen(_ menu: NSMenu) {
+        // The window exists only once the menu is on screen.
+        let timer = Timer(timeInterval: 0.01, repeats: false) { _ in FlashCover.liftMenus() }
+        RunLoop.main.add(timer, forMode: .common)
     }
 }
 

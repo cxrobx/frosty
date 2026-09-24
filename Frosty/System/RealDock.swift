@@ -68,6 +68,14 @@ enum RealDock {
     /// Whether the Dock has an icon for the app, so it has a menu to copy.
     static func hasItem(_ id: String) -> Bool { isTrusted && item(id) != nil }
 
+    /// Where the app's (hidden) Dock icon is, in screen coordinates from the
+    /// top-left. The Dock opens the app's menu above it.
+    static func itemFrame(_ id: String) -> CGRect? {
+        guard isTrusted, let item = item(id), let value = attribute(item, "AXFrame") else { return nil }
+        var frame = CGRect.zero
+        return AXValueGetValue(value as! AXValue, .cgRect, &frame) ? frame : nil
+    }
+
     /// Opens the app's Dock menu and waits for it to appear, which takes
     /// anywhere from 50 to 350 ms.
     private static func openAndWait(_ id: String) -> AXUIElement? {

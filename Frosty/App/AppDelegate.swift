@@ -80,6 +80,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let badges = NSMenuItem(title: "Show Badges", action: #selector(toggleBadges), keyEquivalent: "")
         badges.state = model.config.showBadges ? .on : .off
 
+        let fresh = NSMenuItem(title: "Always-Fresh App Menus (uses Screen Recording)",
+                               action: #selector(toggleFreshDockMenus), keyEquivalent: "")
+        fresh.state = model.config.freshDockMenus ? (FlashCover.hasPermission ? .on : .mixed) : .off
+
         let sizeItem = NSMenuItem()
         sizeItem.view = iconSizeSliderView()
 
@@ -90,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                      action: #selector(requestAccessibility), keyEquivalent: "")]
         }
 
-        for item in [hideDock, autoHide, groupUnpinned, badges] + accessNote + [
+        for item in [hideDock, autoHide, groupUnpinned, badges, fresh] + accessNote + [
                      .separator(),
                      sizeItem,
                      .separator(),
@@ -141,6 +145,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func requestAccessibility() { RealDock.requestAccess() }
+
+    @objc private func toggleFreshDockMenus() {
+        model.edit { $0.freshDockMenus.toggle() }
+        if model.config.freshDockMenus && !FlashCover.hasPermission { FlashCover.requestPermission() }
+    }
 
     @objc private func toggleGroupUnpinned() {
         model.edit { $0.groupUnpinned.toggle() }

@@ -21,6 +21,9 @@ struct FrostyConfig: Codable, Equatable {
     var showBadges: Bool = true
     /// Apps whose badge is hidden even while badges are on.
     var hiddenBadges: Set<String> = []
+    /// Copy each app's Dock menu fresh on every right-click, hiding the real
+    /// menu's flash under a still of the screen. Needs Screen Recording.
+    var freshDockMenus: Bool = false
 
     enum Item: Equatable {
         case app(String)
@@ -45,7 +48,7 @@ struct FrostyConfig: Codable, Equatable {
         self.icons = icons
     }
 
-    private enum CodingKeys: String, CodingKey { case items, autoHide, iconSize, icons, groupUnpinned, showBadges, hiddenBadges }
+    private enum CodingKeys: String, CodingKey { case items, autoHide, iconSize, icons, groupUnpinned, showBadges, hiddenBadges, freshDockMenus }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -56,6 +59,7 @@ struct FrostyConfig: Codable, Equatable {
         groupUnpinned = try c.decodeIfPresent(Bool.self, forKey: .groupUnpinned) ?? true
         showBadges = try c.decodeIfPresent(Bool.self, forKey: .showBadges) ?? true
         hiddenBadges = Set(try c.decodeIfPresent([String].self, forKey: .hiddenBadges) ?? [])
+        freshDockMenus = try c.decodeIfPresent(Bool.self, forKey: .freshDockMenus) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -68,6 +72,7 @@ struct FrostyConfig: Codable, Equatable {
         try c.encode(showBadges, forKey: .showBadges)
         // Sorted, so the file doesn't churn between saves.
         try c.encode(hiddenBadges.sorted(), forKey: .hiddenBadges)
+        try c.encode(freshDockMenus, forKey: .freshDockMenus)
     }
 
     /// Same range as the real Dock's size slider.
