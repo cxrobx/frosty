@@ -50,6 +50,10 @@ final class BarController {
     /// An app's own Dock menu, opened by a right-click on its tile, is up.
     private var dockMenuOpen = false
     private var dockMenuTimer: Timer?
+    /// Each app's Dock menu, copied the first time the Dock shows it, so from
+    /// then on Frosty draws it over its own tile. Refreshed on every pick that
+    /// goes through the Dock.
+    private var dockMenus: [String: [DockMenuItem]] = [:]
     private var hideWork: DispatchWorkItem?
     private var monitors: [Any] = []
     private var cancellables: Set<AnyCancellable> = []
@@ -198,22 +202,106 @@ final class BarController {
         let flags = event.modifierFlags
         let contextClick = event.type == .rightMouseDown || flags.contains(.control)
         guard contextClick, !flags.contains(.option), let window = event.window,
-              let id = model.appTile(at: event.locationInWindow, in: window),
-              model.isRunning(id), RealDock.showMenu(id) else { return false }
-        watchDockMenu()
+              let tile = model.appTile(at: event.locationInWindow, in: window),
+              model.isRunning(tile.appID) else { return false }
+        let id = tile.appID
+        if let items = dockMenus[id] {
+            // Out of the event monitor first: the menu runs its own tracking loop.
+            DispatchQueue.main.async { self.popUpDockMenu(items, for: id, over: tile) }
+            return true
+        }
+        guard RealDock.showMenu(id) else { return false }
+        watchDockMenu(id)
         return true
     }
 
     /// The Dock's menu gives no sign when it closes, so look every quarter
-    /// second while it is up; `keepsBarOpen` holds the bar until then.
-    private func watchDockMenu() {
+    /// second while it is up; `keepsBarOpen` holds the bar until then. The
+    /// first look also copies the menu for next time.
+    private func watchDockMenu(_ id: String) {
         dockMenuTimer?.invalidate()
         dockMenuOpen = true
         dockMenuTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] timer in
-            guard let self, !RealDock.menuIsOpen else { return }
+            guard let self else { return }
+            if self.dockMenus[id] == nil, let raw = RealDock.openMenuItems() {
+                self.dockMenus[id] = DockMenu.items(from: raw)
+            }
+            guard !RealDock.menuIsOpen else { return }
             timer.invalidate()
             self.dockMenuOpen = false
             self.mouseMoved()
+        }
+    }
+
+    /// The copied Dock menu, centred above the tile like the real one.
+    private func popUpDockMenu(_ items: [DockMenuItem], for id: String, over tile: NSView) {
+        guard let view = panel.contentView else { return }
+        let target = DockMenuTarget { [weak self] path in self?.perform(path, for: id) }
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        Self.fill(menu, with: items, path: [], target: target)
+        // `NSMenu.size` counts hidden alternates (Hide Others, Force Quit) as
+        // rows, which floated the menu a row per alternate above the bar, so
+        // measure a copy without them.
+        let measure = NSMenu()
+        Self.fill(measure, with: items.filter { $0.alternate == nil }, path: [], target: target)
+        let tileRect = tile.convert(tile.bounds, to: view)
+        let point = NSPoint(x: tileRect.midX - menu.size.width / 2, y: view.bounds.maxY + 6 + measure.size.height)
+        withExtendedLifetime(target) { _ = menu.popUp(positioning: nil, at: point, in: view) }
+    }
+
+    private static func fill(_ menu: NSMenu, with items: [DockMenuItem], path: [String], target: DockMenuTarget) {
+        for item in items {
+            switch item.kind {
+            case .separator:
+                menu.addItem(.separator())
+            case .header:
+                let header = NSMenuItem(title: item.title, action: nil, keyEquivalent: "")
+                header.isEnabled = false
+                menu.addItem(header)
+            case .action:
+                let entry = NSMenuItem(title: item.title, action: #selector(DockMenuTarget.choose(_:)), keyEquivalent: "")
+                entry.target = target
+                entry.representedObject = path + [item.title]
+                entry.state = item.checked ? .on : .off
+                entry.keyEquivalentModifierMask = []
+                if let alternate = item.alternate {
+                    entry.isAlternate = true
+                    var mask: NSEvent.ModifierFlags = []
+                    if alternate.contains(.shift) { mask.insert(.shift) }
+                    if alternate.contains(.option) { mask.insert(.option) }
+                    if alternate.contains(.control) { mask.insert(.control) }
+                    if alternate.contains(.command) { mask.insert(.command) }
+                    entry.keyEquivalentModifierMask = mask
+                }
+                if !item.children.isEmpty {
+                    let submenu = NSMenu()
+                    submenu.autoenablesItems = false
+                    fill(submenu, with: item.children, path: path + [item.title], target: target)
+                    entry.action = nil
+                    entry.submenu = submenu
+                }
+                menu.addItem(entry)
+            }
+        }
+    }
+
+    /// Runs a picked item: the common ones directly, the rest through the Dock
+    /// menu itself, which flashes up for a moment at the bottom of the screen.
+    private func perform(_ path: [String], for id: String) {
+        switch DockMenu.local(path) {
+        case .hide: Apps.hide(id)
+        case .quit: Apps.quit(id)
+        case .forceQuit: Apps.running(id)?.forceTerminate()
+        case .showInFinder: Apps.revealInFinder(id)
+        case nil:
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = RealDock.pick(id, path: path)
+                DispatchQueue.main.async { [weak self] in
+                    if let raw = result.items { self?.dockMenus[id] = DockMenu.items(from: raw) }
+                    if !result.picked { NSSound.beep() }
+                }
+            }
         }
     }
 
@@ -276,5 +364,15 @@ final class BarController {
         image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
         image.resizingMode = .stretch
         return image
+    }
+}
+
+/// Receives picks from a copied Dock menu.
+private final class DockMenuTarget: NSObject {
+    private let handler: ([String]) -> Void
+    init(_ handler: @escaping ([String]) -> Void) { self.handler = handler }
+
+    @objc func choose(_ item: NSMenuItem) {
+        if let path = item.representedObject as? [String] { handler(path) }
     }
 }

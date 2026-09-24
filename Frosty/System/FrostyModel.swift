@@ -39,9 +39,9 @@ final class FrostyModel: ObservableObject {
     /// click can open the app's own Dock menu before SwiftUI opens Frosty's.
     let appTiles = NSHashTable<AppTileMarker>.weakObjects()
 
-    /// The app whose tile is under a point in a window's coordinates.
-    func appTile(at point: NSPoint, in window: NSWindow) -> String? {
-        appTiles.allObjects.first { $0.window === window && $0.convert($0.bounds, to: nil).contains(point) }?.appID
+    /// The app tile under a point in a window's coordinates.
+    func appTile(at point: NSPoint, in window: NSWindow) -> AppTileMarker? {
+        appTiles.allObjects.first { $0.window === window && $0.convert($0.bounds, to: nil).contains(point) }
     }
 
     let configURL: URL
