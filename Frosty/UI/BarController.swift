@@ -27,17 +27,7 @@ final class BarPanel: NSPanel {
 
 /// Clicks land on the first try even though the panel is never key.
 final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
-    /// Called once SwiftUI has re-rendered at a new size. Measuring on the
-    /// model's change notification instead reads the size from before the
-    /// re-render, leaving the window one step behind and clipped.
-    var onSizeChange: (() -> Void)?
-
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    override func invalidateIntrinsicContentSize() {
-        super.invalidateIntrinsicContentSize()
-        onSizeChange?()
-    }
 }
 
 /// Places the bar on the main display and slides it in and out.
@@ -76,16 +66,19 @@ final class BarController {
         background.addSubview(hosting)
         panel.contentView = background
 
-        // Refit after any model change: tiles, badges or icon size. The
+        // Refit the bar and the open group after any model change: tiles, badges
+        // or icon size. The
         // hosting view never calls `invalidateIntrinsicContentSize` for a
         // content change, so waiting on it left the window at its old size
         // through a resize. `receive(on:)` runs after the change has landed.
         model.objectWillChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
+                guard let self else { return }
                 // Only a real size change: a relayout mid-slide would cut the animation short.
-                guard let self, self.hosting.fittingSize != self.hosting.frame.size else { return }
-                self.layout(animated: false)
+                if self.hosting.fittingSize != self.hosting.frame.size { self.layout(animated: false) }
+                // After the bar, since the group sits above the tile it opened from.
+                if let name = self.model.openGroup { self.placeGroupPanel(name) }
             }
             .store(in: &cancellables)
         model.$openGroup
@@ -182,9 +175,6 @@ final class BarController {
         }
         let grid = FirstMouseHostingView(rootView: GroupGrid(model: model, name: name))
         grid.sizingOptions = [.intrinsicContentSize]
-        grid.onSizeChange = { [weak self] in
-            DispatchQueue.main.async { self?.placeGroupPanel(name) }
-        }
         let effect = NSVisualEffectView()
         Self.frost(effect, radius: 14)
         effect.addSubview(grid)
