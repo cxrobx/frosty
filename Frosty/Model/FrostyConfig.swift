@@ -27,6 +27,8 @@ struct FrostyConfig: Codable, Equatable {
     /// The display the bar was last moved to, by its UUID (a display's id can
     /// change across a replug or a restart). Absent means the main display.
     var display: String?
+    /// Apps kept in the Open Apps group even when they are not running.
+    var stash: [String] = []
 
     enum Item: Equatable {
         case app(String)
@@ -51,7 +53,7 @@ struct FrostyConfig: Codable, Equatable {
         self.icons = icons
     }
 
-    private enum CodingKeys: String, CodingKey { case items, autoHide, iconSize, icons, groupUnpinned, showBadges, hiddenBadges, freshDockMenus, display }
+    private enum CodingKeys: String, CodingKey { case items, autoHide, iconSize, icons, groupUnpinned, showBadges, hiddenBadges, freshDockMenus, display, stash }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -64,6 +66,7 @@ struct FrostyConfig: Codable, Equatable {
         hiddenBadges = Set(try c.decodeIfPresent([String].self, forKey: .hiddenBadges) ?? [])
         freshDockMenus = try c.decodeIfPresent(Bool.self, forKey: .freshDockMenus) ?? false
         display = try c.decodeIfPresent(String.self, forKey: .display)
+        stash = try c.decodeIfPresent([String].self, forKey: .stash) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -78,6 +81,7 @@ struct FrostyConfig: Codable, Equatable {
         try c.encode(hiddenBadges.sorted(), forKey: .hiddenBadges)
         try c.encode(freshDockMenus, forKey: .freshDockMenus)
         try c.encodeIfPresent(display, forKey: .display)
+        try c.encode(stash, forKey: .stash)
     }
 
     /// Same range as the real Dock's size slider.
@@ -135,9 +139,17 @@ extension FrostyConfig.Item: Codable {
 
 extension FrostyConfig {
     /// Add an app to the end of the bar, unless it is already placed somewhere.
+    /// A stashed app leaves the stash for it.
     mutating func pin(_ id: String) {
         guard !placedBundleIDs.contains(id) else { return }
+        stash.removeAll { $0 == id }
         items.append(.app(id))
+    }
+
+    /// Keep an app in the Open Apps group, running or not, taking it off the bar.
+    mutating func stash(_ id: String) {
+        remove(id)
+        stash.append(id)
     }
 
     /// Take an app off the bar entirely. A group left empty goes with it.
@@ -233,9 +245,11 @@ extension FrostyConfig {
         items.firstIndex { if case .group(let g) = $0 { return g.name == name } else { return false } }
     }
 
-    /// Removes every placement of `id`; returns the top-level index it was at.
+    /// Removes every placement of `id`, the stash included; returns the
+    /// top-level index it was at.
     @discardableResult
     private mutating func remove(_ id: String) -> Int? {
+        stash.removeAll { $0 == id }
         var position: Int?
         var result: [Item] = []
         for item in items {

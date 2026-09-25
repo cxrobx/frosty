@@ -68,6 +68,11 @@ Frosty and hide the Dock. It compiles `Frosty/Model/` directly instead.
   aren't placed. Two or more of those collect into one **Open Apps** group (turn
   off with *Group Unpinned Apps* in the ❄︎ menu, or `"groupUnpinned": false`).
   An app inside a group never appears loose; the group's dot lights up.
+- **Stash:** Move to Group › Open Apps (or drag an app onto the Open Apps box)
+  keeps it in that box even after it quits (no dot), one click from
+  launching. A stash shows the box even when nothing else is open. Remove from
+  “Open Apps”, Keep in Frosty, or moving it to a group takes it back out
+  (`"stash"` in the config).
 - **Right-click a running app:** the app's own Dock menu (New Message, recent files,
   Options…), over its tile. macOS only opens that menu over the hidden real Dock's
   icon, so the first time you right-click an app Frosty opens it there for a
@@ -80,8 +85,8 @@ Frosty and hide the Dock. It compiles `Frosty/Model/` directly instead.
   the click rather than at once. Picking an app-specific
   item flashes the real menu at the bottom of the screen for a moment.
 - **Option-right-click an app** (or right-click one that isn't running): Hide · Quit ·
-  Keep in / Remove from Frosty · Move to Group (existing or New Group…) · Remove
-  from group · Show in Finder.
+  Keep in / Remove from Frosty · Move to Group (existing, Open Apps, or New Group…) ·
+  Remove from group · Show in Finder.
 - **Right-click a group:** Rename… · Ungroup.
 - **Resize:** drag the divider up or down, as in the real Dock, or use the Icon
   Size slider in the ❄︎ menu (the bar stays up while the menu is open). 16–128 pt.

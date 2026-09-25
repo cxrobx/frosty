@@ -4,8 +4,8 @@ import Foundation
 enum BarEntry: Equatable, Identifiable {
     case app(id: String, running: Bool, placed: Bool)
     case group(name: String, apps: [String], anyRunning: Bool)
-    /// Running apps that aren't placed anywhere, collected into one group.
-    case openApps(apps: [String])
+    /// Stashed apps, then running apps that aren't placed anywhere, collected into one group.
+    case openApps(apps: [String], anyRunning: Bool)
     case separator
 
     /// `openGroup` key for the Open Apps group. The control character keeps it
@@ -24,11 +24,13 @@ enum BarEntry: Equatable, Identifiable {
 }
 
 enum BarLayout {
-    /// Placed items first, in config order. Then, after a separator, running apps
-    /// that are not placed anywhere: collected into one Open Apps group when
-    /// `groupUnpinned` is on and there are two or more (a group of one would only
-    /// cost a click), otherwise shown loose. An app that lives in a group is
-    /// never shown loose, even while it runs; the group lights up instead.
+    /// Placed items first, in config order. Then, after a separator, the Open
+    /// Apps group: stashed apps, running or not, and running apps that are not
+    /// placed anywhere. Unplaced running apps join it only when `groupUnpinned`
+    /// is on, and without a stash only when there are two or more (a group of
+    /// one would only cost a click); otherwise they are shown loose. An app that
+    /// lives in a group is never shown loose, even while it runs; the group
+    /// lights up instead.
     static func entries(config: FrostyConfig, running: [String]) -> [BarEntry] {
         let runningSet = Set(running)
         var result: [BarEntry] = config.items.map { item in
@@ -39,16 +41,18 @@ enum BarLayout {
                 return .group(name: g.name, apps: g.apps, anyRunning: g.apps.contains(where: runningSet.contains))
             }
         }
-        let placed = config.placedBundleIDs
-        var seen = Set<String>()
-        let loose = running.filter { !placed.contains($0) && seen.insert($0).inserted }
-        if !loose.isEmpty {
-            if !result.isEmpty { result.append(.separator) }
-            if config.groupUnpinned && loose.count >= 2 {
-                result.append(.openApps(apps: loose))
-            } else {
-                result += loose.map { .app(id: $0, running: true, placed: false) }
-            }
+        var seen = config.placedBundleIDs
+        let stashed = config.stash.filter { seen.insert($0).inserted }
+        let loose = running.filter { seen.insert($0).inserted }
+        let grouped = config.groupUnpinned && (!stashed.isEmpty || loose.count >= 2)
+        var box = stashed
+        if grouped { box += loose }
+        if !box.isEmpty || !loose.isEmpty, !result.isEmpty { result.append(.separator) }
+        if !box.isEmpty {
+            result.append(.openApps(apps: box, anyRunning: box.contains(where: runningSet.contains)))
+        }
+        if !grouped {
+            result += loose.map { .app(id: $0, running: true, placed: false) }
         }
         return result
     }

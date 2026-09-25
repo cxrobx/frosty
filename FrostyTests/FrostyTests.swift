@@ -9,7 +9,7 @@ final class BarLayoutTests: XCTestCase {
 
     func testUnpinnedRunningAppsCollectIntoOpenApps() {
         let entries = BarLayout.entries(config: config, running: ["finder", "slack", "zen", "slack"])
-        XCTAssertEqual(Array(entries.suffix(2)), [.separator, .openApps(apps: ["slack", "zen"])])
+        XCTAssertEqual(Array(entries.suffix(2)), [.separator, .openApps(apps: ["slack", "zen"], anyRunning: true)])
     }
 
     func testASingleUnpinnedAppStaysLoose() {
@@ -40,7 +40,28 @@ final class BarLayoutTests: XCTestCase {
 
     func testNoSeparatorWhenNothingIsPlaced() {
         let entries = BarLayout.entries(config: FrostyConfig(items: []), running: ["a", "a", "b"])
-        XCTAssertEqual(entries, [.openApps(apps: ["a", "b"])])
+        XCTAssertEqual(entries, [.openApps(apps: ["a", "b"], anyRunning: true)])
+    }
+
+    func testStashedAppsStayInOpenAppsWhenNotRunning() {
+        var config = config
+        config.stash = ["notes"]
+        XCTAssertEqual(Array(BarLayout.entries(config: config, running: []).suffix(2)),
+                       [.separator, .openApps(apps: ["notes"], anyRunning: false)])
+        // One loose running app joins a stash, where alone it would stay loose.
+        XCTAssertEqual(BarLayout.entries(config: config, running: ["slack", "notes"]).last,
+                       .openApps(apps: ["notes", "slack"], anyRunning: true))
+    }
+
+    func testStashWithoutGroupingKeepsRunningAppsLoose() {
+        var config = config
+        config.stash = ["notes", "finder"]   // finder is placed, so it isn't stashed twice
+        config.groupUnpinned = false
+        XCTAssertEqual(Array(BarLayout.entries(config: config, running: ["slack"]).suffix(3)), [
+            .separator,
+            .openApps(apps: ["notes"], anyRunning: false),
+            .app(id: "slack", running: true, placed: false),
+        ])
     }
 
     // Two displays side by side, and a wider third above the left one.
@@ -101,6 +122,21 @@ final class ConfigEditTests: XCTestCase {
         XCTAssertEqual(c.items, [.app("b"), .app("a"), .app("c")])
     }
 
+    func testStashTakesAnAppOffTheBarAndPinOrMoveTakesItBack() {
+        var c = FrostyConfig(items: [.app("x"), .group(.init(name: "G", apps: ["a"]))])
+        c.stash("a")
+        c.stash("x")
+        XCTAssertEqual(c.items, [])
+        XCTAssertEqual(c.stash, ["a", "x"])
+        c.pin("a")
+        c.move("x", toGroup: "H")
+        XCTAssertEqual(c.items, [.app("a"), .group(.init(name: "H", apps: ["x"]))])
+        XCTAssertEqual(c.stash, [])
+        c.stash("y")
+        c.unpin("y")
+        XCTAssertEqual(c.stash, [])
+    }
+
     func testUngroupInlinesApps() {
         var c = FrostyConfig(items: [.app("x"), .group(.init(name: "G", apps: ["a", "b"])), .app("y")])
         c.ungroup("G")
@@ -133,6 +169,14 @@ final class ConfigEditTests: XCTestCase {
         XCTAssertEqual(c.icons, ["md.obsidian": "~/icon.png"])
         let plain = try JSONDecoder().decode(FrostyConfig.self, from: Data(#"{"items":[]}"#.utf8))
         XCTAssertEqual(plain.icons, [:])
+    }
+
+    func testStashDefaultsEmptyAndRoundTrips() throws {
+        let plain = try JSONDecoder().decode(FrostyConfig.self, from: Data(#"{"items":[]}"#.utf8))
+        XCTAssertEqual(plain.stash, [])
+        let c = try JSONDecoder().decode(FrostyConfig.self, from: Data(#"{"items":[],"stash":["b","a"]}"#.utf8))
+        XCTAssertEqual(c.stash, ["b", "a"])
+        XCTAssertEqual(try JSONDecoder().decode(FrostyConfig.self, from: JSONEncoder().encode(c)), c)
     }
 
     func testIconSizeIsClampedToTheDockRange() throws {

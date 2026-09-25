@@ -14,8 +14,8 @@ struct BarView: View {
                     AppTile(model: model, id: id, running: running, placed: placed, group: nil, size: size)
                 case .group(let name, let apps, let anyRunning):
                     GroupTile(model: model, name: name, apps: apps, anyRunning: anyRunning, size: size)
-                case .openApps(let apps):
-                    GroupTile(model: model, name: BarEntry.openAppsKey, apps: apps, anyRunning: true, size: size)
+                case .openApps(let apps, let anyRunning):
+                    GroupTile(model: model, name: BarEntry.openAppsKey, apps: apps, anyRunning: anyRunning, size: size)
                 case .separator:
                     ResizeDivider(model: model, size: size)
                 }
@@ -124,6 +124,8 @@ struct AppMenu: View {
     let placed: Bool
     let group: String?
 
+    private var stashed: Bool { model.config.stash.contains(id) }
+
     var body: some View {
         if running {
             Button("Hide") { Apps.hide(id) }
@@ -136,6 +138,9 @@ struct AppMenu: View {
             }
             Button("Remove from Frosty") { model.edit { $0.unpin(id) } }
         } else {
+            if stashed {
+                Button("Remove from “\(BarEntry.openAppsTitle)”") { model.edit { $0.unpin(id) } }
+            }
             Button("Keep in Frosty") { model.edit { $0.pin(id) } }
         }
         Menu("Move to Group") {
@@ -143,6 +148,10 @@ struct AppMenu: View {
                 Button(name) { model.edit { $0.move(id, toGroup: name) } }
             }
             if model.config.groupNames.contains(where: { $0 != group }) { Divider() }
+            if !stashed {
+                Button(BarEntry.openAppsTitle) { model.edit { $0.stash(id) } }
+                Divider()
+            }
             Button("New Group…") {
                 if let name = Prompt.text(title: "New group", message: "Name for the group holding \(Apps.name(id)):",
                                           existing: model.config.groupNames) {
@@ -215,8 +224,9 @@ struct GroupTile: View {
         }
         .overlay { DropMarker(model: model, target: .group(name)) }
         .onDrag { isOpenApps ? NSItemProvider() : TileDrop.begin(.group(name), model: model) }
-        .onDrop(of: [TileDrop.type], delegate: TileDrop(model: model, target: .group(name), enabled: !isOpenApps,
-                                                         width: size, acceptsInto: true))
+        // Open Apps takes an app anywhere on its tile, to stash it; it has no place of its own to drop beside.
+        .onDrop(of: [TileDrop.type], delegate: TileDrop(model: model, target: .group(name), enabled: true,
+                                                         width: size, acceptsInto: true, intoOnly: isOpenApps))
     }
 
     private var isOpenApps: Bool { name == BarEntry.openAppsKey }
@@ -272,7 +282,7 @@ struct GroupGrid: View {
     private var isOpenApps: Bool { name == BarEntry.openAppsKey }
     private var apps: [String] {
         if isOpenApps {
-            for case .openApps(let apps) in model.entries { return apps }
+            for case .openApps(let apps, _) in model.entries { return apps }
             return []
         }
         for case .group(let g) in model.config.items where g.name == name { return g.apps }
@@ -338,6 +348,8 @@ struct TileDrop: DropDelegate {
     let enabled: Bool
     let width: CGFloat
     let acceptsInto: Bool
+    /// Only an app may be dropped, and only into the tile (the Open Apps group).
+    var intoOnly = false
 
     static func begin(_ ref: FrostyConfig.Ref, model: FrostyModel) -> NSItemProvider {
         let token = "frosty-tile-" + UUID().uuidString
@@ -347,13 +359,15 @@ struct TileDrop: DropDelegate {
     }
 
     private func position(_ info: DropInfo) -> DropHint.Position {
+        if intoOnly { return .into }
         let x = info.location.x
         if acceptsInto, case .app = model.dragging, x > width * 0.25, x < width * 0.75 { return .into }
         return x < width / 2 ? .before : .after
     }
 
     func validateDrop(info: DropInfo) -> Bool {
-        enabled && model.dragging != nil && model.dragging != target
+        if intoOnly, case .group = model.dragging { return false }
+        return enabled && model.dragging != nil && model.dragging != target
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
@@ -380,7 +394,7 @@ struct TileDrop: DropDelegate {
                 guard (text as? String) == token else { return }
                 model.edit { config in
                     if position == .into, case .app(let id) = dragged, case .group(let name) = target {
-                        config.move(id, toGroup: name)
+                        if name == BarEntry.openAppsKey { config.stash(id) } else { config.move(id, toGroup: name) }
                     } else {
                         config.place(dragged, beside: target, after: position == .after)
                     }
