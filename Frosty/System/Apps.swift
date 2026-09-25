@@ -41,6 +41,9 @@ enum Apps {
         return image
     }
 
+    /// Drops one app's cached icon, so the next `icon(_:)` reads it from disk again.
+    static func forgetIcon(_ id: String) { iconCache[id] = nil }
+
     /// Launches the app, or brings it forward if it is running. Going through
     /// `openApplication` rather than `NSRunningApplication.activate` matters:
     /// it sends the reopen event, so an app with no windows opens one, exactly

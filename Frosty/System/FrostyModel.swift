@@ -23,6 +23,9 @@ final class FrostyModel: ObservableObject {
     /// Badge text the real Dock shows, by bundle id. Empty unless badges are on
     /// and Frosty has Accessibility access.
     @Published private(set) var badges: [String: String] = [:]
+    /// Bumped whenever an app's cached icon is dropped, so every icon redraws,
+    /// including `GroupIcon`, which doesn't observe the model.
+    @Published private(set) var iconEpoch = 0
     /// The tile being dragged, and where it would land if dropped now.
     var dragging: FrostyConfig.Ref?
     var dragToken: String?
@@ -71,6 +74,16 @@ final class FrostyModel: ObservableObject {
                 self?.refreshRunning()
             })
         }
+        // Icons are cached for as long as Frosty runs, so an app whose icon changed on disk (an
+        // update, a custom icon) would keep its old one. Read it again when the app launches, and
+        // once more shortly after: an app can set its own icon just after it starts, as Onyx does.
+        observers.append(center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification,
+                                            object: nil, queue: .main) { [weak self] note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  let id = app.bundleIdentifier else { return }
+            self?.reloadIcon(id)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.reloadIcon(id) }
+        })
 
         // The Dock tells nobody when a badge changes, so ask it every couple of seconds.
         badgeTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refreshBadges() }
@@ -134,6 +147,11 @@ final class FrostyModel: ObservableObject {
     }
 
     func isRunning(_ id: String) -> Bool { running.contains(id) }
+
+    private func reloadIcon(_ id: String) {
+        Apps.forgetIcon(id)
+        iconEpoch &+= 1
+    }
 
     // MARK: - Edits (each one saves)
 

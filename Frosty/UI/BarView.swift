@@ -196,7 +196,7 @@ struct GroupTile: View {
 
     var body: some View {
         VStack(spacing: 2) {
-                GroupIcon(apps: apps, size: size)
+                GroupIcon(apps: apps, size: size, iconEpoch: model.iconEpoch)
                     .overlay(alignment: .topTrailing) { BadgeView(text: model.groupBadge(apps), size: size) }
                     .scaleEffect(hovering ? 1.08 : 1, anchor: .bottom)
                     .animation(.easeOut(duration: 0.12), value: hovering)
@@ -246,6 +246,8 @@ struct GroupTile: View {
 struct GroupIcon: View {
     let apps: [String]
     let size: CGFloat
+    /// Unread here: a new value is what makes SwiftUI draw the icons again after one changes.
+    var iconEpoch = 0
 
     var body: some View {
         let cell = size * 0.36

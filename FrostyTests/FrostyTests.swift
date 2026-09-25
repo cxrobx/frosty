@@ -336,3 +336,33 @@ final class DockHiderTests: XCTestCase {
         XCTAssertEqual((dock.prefs["autohide"] as? NSNumber)?.boolValue, true)
     }
 }
+
+final class AppIconTests: XCTestCase {
+    private func png(width: Int) -> Data {
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: width,
+                                   bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                   colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        return rep.representation(using: .png, properties: [:])!
+    }
+
+    /// An icon that changed on disk shows once its app launches (FrostyModel forgets it then), not
+    /// only after Frosty restarts: the cache used to be cleared only by a config edit.
+    func testAForgottenIconIsReadFromDiskAgain() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let saved = Apps.iconOverrides
+        defer {
+            Apps.iconOverrides = saved
+            try? FileManager.default.removeItem(at: dir)
+        }
+        let file = dir.appendingPathComponent("icon.png")
+        try png(width: 8).write(to: file)
+        Apps.iconOverrides = ["com.example.icon": file.path]
+        XCTAssertEqual(Apps.icon("com.example.icon").size.width, 8)
+
+        try png(width: 16).write(to: file)
+        XCTAssertEqual(Apps.icon("com.example.icon").size.width, 8, "cached until forgotten")
+        Apps.forgetIcon("com.example.icon")
+        XCTAssertEqual(Apps.icon("com.example.icon").size.width, 16)
+    }
+}

@@ -42,6 +42,7 @@ targets:
     sources:
       - path: FrostyTests
       - path: Frosty/Model
+      - path: Frosty/System/Apps.swift
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
