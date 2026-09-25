@@ -306,21 +306,23 @@ struct GroupGrid: View {
     }
 }
 
-/// A Dock-style count in the icon's top-right corner. Proportions and colors
-/// are measured off the real Dock: a circle until the label outgrows it, light
-/// text, and a red that stays the same in dark mode.
+/// A Dock-style count in the icon's top-right corner. Proportions, weight and
+/// colors are measured off a screenshot of the real Dock: a circle until the
+/// label outgrows it, semibold digits, a red that stays the same in dark mode,
+/// and barely any shadow. Screenshots carry the display's profile (near P3), so
+/// the red was converted to sRGB before being written down here.
 private struct BadgeView: View {
     let text: String?
     let size: CGFloat
 
-    private static let top = Color(red: 0.90, green: 0.36, blue: 0.27)
-    private static let bottom = Color(red: 0.85, green: 0.29, blue: 0.23)
+    private static let top = Color(red: 0.894, green: 0.345, blue: 0.259)
+    private static let bottom = Color(red: 0.847, green: 0.302, blue: 0.231)
 
     var body: some View {
         if let text {
             let diameter = max(14, size * 0.38)
             Text(text)
-                .font(.system(size: diameter * 0.52, weight: .regular))
+                .font(.system(size: diameter * 0.52, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -328,8 +330,8 @@ private struct BadgeView: View {
                 .frame(minWidth: diameter, minHeight: diameter, maxHeight: diameter)
                 .background(Capsule().fill(LinearGradient(colors: [Self.top, Self.bottom],
                                                           startPoint: .top, endPoint: .bottom)))
-                .shadow(color: .black.opacity(0.3), radius: 1, y: 0.5)
-                .offset(x: size * 0.04)
+                .shadow(color: .black.opacity(0.12), radius: 0.5, y: 0.5)
+                .offset(x: size * 0.035)
                 .allowsHitTesting(false)
         }
     }
