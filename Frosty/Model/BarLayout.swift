@@ -53,3 +53,15 @@ enum BarLayout {
         return result
     }
 }
+
+extension BarLayout {
+    /// The display whose bottom edge the pointer is pressed against, as an index
+    /// into `displays` (frames in AppKit's bottom-left coordinates). An edge with
+    /// another display right below it is only a crossing, not the bottom.
+    static func bottomEdgeDisplay(at p: CGPoint, displays: [CGRect]) -> Int? {
+        displays.firstIndex { d in
+            p.x >= d.minX && p.x < d.maxX && p.y >= d.minY - 1 && p.y <= d.minY + 1
+                && !displays.contains { $0 != d && $0.contains(CGPoint(x: p.x, y: d.minY - 1)) }
+        }
+    }
+}

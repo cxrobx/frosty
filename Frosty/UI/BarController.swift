@@ -30,7 +30,9 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
-/// Places the bar on the main display and slides it in and out.
+/// Places the bar on a display and slides it in and out. It starts on the main
+/// display and, like the real Dock, moves to any display whose bottom edge the
+/// pointer is pushed against.
 final class BarController {
     private let model: FrostyModel
     private let panel = BarPanel()
@@ -151,8 +153,12 @@ final class BarController {
 
     deinit { monitors.forEach(NSEvent.removeMonitor) }
 
-    /// The display with the menu bar, where the real Dock lives by default.
-    private var screen: NSScreen? { NSScreen.screens.first }
+    /// The display the bar is on, kept by id: unplugging it falls back to the
+    /// display with the menu bar, where the real Dock lives by default.
+    private var screenID: CGDirectDisplayID?
+    private var screen: NSScreen? {
+        NSScreen.screens.first { $0.displayID == screenID } ?? NSScreen.screens.first
+    }
 
     private func frame(shown: Bool) -> NSRect {
         guard let screen else { return .zero }
@@ -221,7 +227,8 @@ final class BarController {
     /// Always-Fresh App Menus: copy the menu now, with the Dock's flash hidden
     /// under `FlashCover`, and draw it at the tile.
     private func openFreshDockMenu(_ id: String, over tile: NSView, dockIcon: CGRect) {
-        guard let screen else { return }
+        // The real Dock stays on the main display wherever the bar is.
+        guard let screen = NSScreen.screens.first else { return }
         // The Dock opens the menu above its hidden icon. A menu listing long
         // window titles runs about 900 pt wide, so cover 500 pt either side.
         let rect = NSRect(x: dockIcon.midX - 500, y: screen.frame.minY, width: 1000, height: screen.frame.height * 0.75)
@@ -382,12 +389,17 @@ final class BarController {
     }
 
     private func mouseMoved() {
-        guard model.config.autoHide, let screen else { return }
         let p = NSEvent.mouseLocation
+        let screens = NSScreen.screens
+        let edge = BarLayout.bottomEdgeDisplay(at: p, displays: screens.map(\.frame)).map { screens[$0] }
+        if let edge, edge.displayID != screen?.displayID, !isBusy {
+            move(to: edge)
+            return
+        }
+        guard model.config.autoHide else { return }
 
         if !shown {
-            let atBottomEdge = p.y <= screen.frame.minY + 1 && p.x >= screen.frame.minX && p.x <= screen.frame.maxX
-            if atBottomEdge { setShown(true) }
+            if edge != nil { setShown(true) }
             return
         }
 
@@ -407,11 +419,27 @@ final class BarController {
         }
     }
 
+    /// Parks the bar below the new display's bottom edge, then slides it up there.
+    private func move(to target: NSScreen) {
+        model.openGroup = nil
+        hideWork?.cancel()
+        hideWork = nil
+        screenID = target.displayID
+        shown = false
+        layout(animated: false)
+        setShown(true)
+    }
+
+    /// Menus, Frosty's or the app's own Dock menu, hang outside the bar, and a
+    /// held button may be a tile drag: none of them may lose the bar.
+    private var isBusy: Bool {
+        holdOpen || menusOpen > 0 || dockMenuOpen || NSEvent.pressedMouseButtons != 0
+    }
+
     /// The pointer is over the bar (with some slack), or over an open group
-    /// popover, or a button is held: a drag of a tile must not lose its target.
+    /// popover, or the bar is busy.
     private func keepsBarOpen(_ p: NSPoint) -> Bool {
-        // Menus, Frosty's or the app's own Dock menu, hang outside the bar.
-        if holdOpen || menusOpen > 0 || dockMenuOpen || NSEvent.pressedMouseButtons != 0 { return true }
+        if isBusy { return true }
         if panel.frame.insetBy(dx: -16, dy: -16).contains(p) { return true }
         // The gap between the bar and the group panel counts as inside.
         return groupPanel.isVisible && groupPanel.frame.union(panel.frame).insetBy(dx: -16, dy: -16).contains(p)
@@ -454,5 +482,11 @@ private final class DockMenuTarget: NSObject {
 
     @objc func choose(_ item: NSMenuItem) {
         if let path = item.representedObject as? [String] { handler(path) }
+    }
+}
+
+private extension NSScreen {
+    var displayID: CGDirectDisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
     }
 }

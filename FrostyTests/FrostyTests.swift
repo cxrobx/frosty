@@ -42,6 +42,27 @@ final class BarLayoutTests: XCTestCase {
         let entries = BarLayout.entries(config: FrostyConfig(items: []), running: ["a", "a", "b"])
         XCTAssertEqual(entries, [.openApps(apps: ["a", "b"])])
     }
+
+    // Two displays side by side, and a wider third above the left one.
+    let displays = [CGRect(x: 0, y: 0, width: 1512, height: 982),
+                    CGRect(x: 1512, y: -200, width: 2560, height: 1440),
+                    CGRect(x: -400, y: 982, width: 1912, height: 1080)]
+
+    func testBottomEdgeFindsTheDisplayUnderThePointer() {
+        XCTAssertEqual(BarLayout.bottomEdgeDisplay(at: CGPoint(x: 700, y: 0), displays: displays), 0)
+        XCTAssertEqual(BarLayout.bottomEdgeDisplay(at: CGPoint(x: 2000, y: -200), displays: displays), 1)
+    }
+
+    func testAwayFromTheBottomEdgeIsNoDisplay() {
+        XCTAssertNil(BarLayout.bottomEdgeDisplay(at: CGPoint(x: 700, y: 400), displays: displays))
+        XCTAssertNil(BarLayout.bottomEdgeDisplay(at: CGPoint(x: 2000, y: 0), displays: displays))
+    }
+
+    func testAnEdgeWithADisplayBelowIsNotTheBottom() {
+        XCTAssertNil(BarLayout.bottomEdgeDisplay(at: CGPoint(x: 700, y: 982), displays: displays))
+        // Past the lower display's left side, the upper one's edge is a real bottom.
+        XCTAssertEqual(BarLayout.bottomEdgeDisplay(at: CGPoint(x: -200, y: 982), displays: displays), 2)
+    }
 }
 
 final class ConfigEditTests: XCTestCase {
