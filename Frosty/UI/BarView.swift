@@ -307,31 +307,33 @@ struct GroupGrid: View {
 }
 
 /// A Dock-style count in the icon's top-right corner. Proportions, weight and
-/// colors are measured off a screenshot of the real Dock: a circle until the
-/// label outgrows it, semibold digits, a red that stays the same in dark mode,
-/// and barely any shadow. Screenshots carry the display's profile (near P3), so
-/// the red was converted to sRGB before being written down here.
+/// color are measured off screenshots of the real Dock next to this bar on the
+/// same display: a circle until the label outgrows it, light digits, one flat
+/// red that stays the same in dark mode, and a faint shadow. Screenshots carry
+/// the display's profile (near P3), so the red was converted to sRGB before
+/// being written down here.
 private struct BadgeView: View {
     let text: String?
     let size: CGFloat
 
-    private static let top = Color(red: 0.894, green: 0.345, blue: 0.259)
-    private static let bottom = Color(red: 0.847, green: 0.302, blue: 0.231)
+    private static let red = Color(red: 0.957, green: 0.275, blue: 0.208)
 
     var body: some View {
         if let text {
             let diameter = max(14, size * 0.38)
             Text(text)
-                .font(.system(size: diameter * 0.52, weight: .semibold))
+                .font(.system(size: diameter * 0.49, weight: .light))
                 .monospacedDigit()
+                .tracking(-diameter * 0.02)
                 .foregroundStyle(.white)
                 .lineLimit(1)
+                // Light digits sit high in their line box; the Dock's are centred.
+                .offset(x: -diameter * 0.007, y: diameter * 0.017)
                 .padding(.horizontal, text.count > 2 ? diameter * 0.22 : 0)
                 .frame(minWidth: diameter, minHeight: diameter, maxHeight: diameter)
-                .background(Capsule().fill(LinearGradient(colors: [Self.top, Self.bottom],
-                                                          startPoint: .top, endPoint: .bottom)))
-                .shadow(color: .black.opacity(0.12), radius: 0.5, y: 0.5)
-                .offset(x: size * 0.035)
+                .background(Capsule().fill(Self.red))
+                .shadow(color: .black.opacity(0.3), radius: 1, y: 0.5)
+                .offset(x: size * 0.012)
                 .allowsHitTesting(false)
         }
     }
