@@ -157,6 +157,15 @@ final class ConfigEditTests: XCTestCase {
         XCTAssertEqual(c.hiddenBadges, ["z"])
     }
 
+    func testDisplayIsOptionalAndRoundTrips() throws {
+        let plain = try JSONDecoder().decode(FrostyConfig.self, from: Data(#"{"items":[]}"#.utf8))
+        XCTAssertNil(plain.display)
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(plain), as: UTF8.self).contains("display"))
+        var c = plain
+        c.display = "37D8832A-2D66-02CA-B9F7-8F30A301B230"
+        XCTAssertEqual(try JSONDecoder().decode(FrostyConfig.self, from: JSONEncoder().encode(c)), c)
+    }
+
     func testMalformedItemIsRejected() {
         let json = #"{"items":[{"nope":1}]}"#
         XCTAssertThrowsError(try JSONDecoder().decode(FrostyConfig.self, from: Data(json.utf8)))

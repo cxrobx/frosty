@@ -85,6 +85,10 @@ Frosty and hide the Dock. It compiles `Frosty/Model/` directly instead.
 - **Right-click a group:** Rename… · Ungroup.
 - **Resize:** drag the divider up or down, as in the real Dock, or use the Icon
   Size slider in the ❄︎ menu (the bar stays up while the menu is open). 16–128 pt.
+- **Other displays:** push the pointer against the bottom edge of any display and
+  the bar moves there, as the real Dock does. It remembers that display across
+  restarts (`"display"` in the config); while it is unplugged the bar waits on the
+  main display.
 - **Menu-bar ❄︎:** Hide the Real Dock · Auto-hide Frosty · Group Unpinned Apps · Icon Size · Edit Config… · Reload
   Config · Quit.
 
@@ -118,7 +122,7 @@ drag-to-reorder yet.
 
 ## Not built (yet)
 
-Main display only · no drag-and-drop onto icons · no badges · no window previews ·
+No drag-and-drop onto icons · no badges · no window previews ·
 no launch at login. Minimize, Mission Control and Cmd-Tab still use Apple's hidden
 Dock, which no third-party bar can take over.
 

@@ -153,11 +153,12 @@ final class BarController {
 
     deinit { monitors.forEach(NSEvent.removeMonitor) }
 
-    /// The display the bar is on, kept by id: unplugging it falls back to the
-    /// display with the menu bar, where the real Dock lives by default.
-    private var screenID: CGDirectDisplayID?
+    /// The display the bar is on, saved in the config so it survives a restart.
+    /// While that display is unplugged the bar sits on the display with the menu
+    /// bar, where the real Dock lives by default, and goes back when it returns.
     private var screen: NSScreen? {
-        NSScreen.screens.first { $0.displayID == screenID } ?? NSScreen.screens.first
+        NSScreen.screens.first { $0.displayUUID != nil && $0.displayUUID == model.config.display }
+            ?? NSScreen.screens.first
     }
 
     private func frame(shown: Bool) -> NSRect {
@@ -392,7 +393,7 @@ final class BarController {
         let p = NSEvent.mouseLocation
         let screens = NSScreen.screens
         let edge = BarLayout.bottomEdgeDisplay(at: p, displays: screens.map(\.frame)).map { screens[$0] }
-        if let edge, edge.displayID != screen?.displayID, !isBusy {
+        if let edge, edge.displayUUID != screen?.displayUUID, !isBusy {
             move(to: edge)
             return
         }
@@ -424,7 +425,7 @@ final class BarController {
         model.openGroup = nil
         hideWork?.cancel()
         hideWork = nil
-        screenID = target.displayID
+        model.edit { $0.display = target.displayUUID }
         shown = false
         layout(animated: false)
         setShown(true)
@@ -486,7 +487,9 @@ private final class DockMenuTarget: NSObject {
 }
 
 private extension NSScreen {
-    var displayID: CGDirectDisplayID? {
-        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+    var displayUUID: String? {
+        guard let id = (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value,
+              let uuid = CGDisplayCreateUUIDFromDisplayID(id)?.takeRetainedValue() else { return nil }
+        return CFUUIDCreateString(nil, uuid) as String
     }
 }
