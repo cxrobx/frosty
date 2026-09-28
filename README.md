@@ -25,9 +25,9 @@ The build is ad-hoc signed, so the first launch may need right-click → Open.
 
 Badges and each app's own right-click menu are read from the real Dock, so they need
 Accessibility access (Frosty's menu → Allow Accessibility). macOS ties that grant to an
-ad-hoc build, so it is lost on every rebuild. `scripts/install.sh` builds, installs and,
-with `FROSTY_SIGN_IDENTITY` set to one of your signing identities, re-signs the app so
-the grant sticks. On a managed Mac where `/Applications` is locked, set
+ad-hoc build, so it is lost on every rebuild. `scripts/install.sh` builds, installs and
+re-signs the app with the first Apple Development identity in your keychain, so the
+grant sticks (set `FROSTY_SIGN_IDENTITY` to pick another, or `-` to stay ad-hoc). On a managed Mac where `/Applications` is locked, set
 `FROSTY_APP_DIR=~/Applications`.
 
 If badges vanish after a rebuild, the old grant is stale. Toggling Frosty off and on in
