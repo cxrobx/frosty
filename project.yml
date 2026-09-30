@@ -12,23 +12,40 @@ settings:
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
 
+packages:
+  # Pinned exactly: the framework that verifies updates and the sign_update tool
+  # scripts/release.sh signs them with should move together.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
+
 targets:
   Frosty:
     type: application
     platform: macOS
     sources:
       - path: Frosty
+    dependencies:
+      - package: Sparkle
+        product: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cx.frosty
         PRODUCT_NAME: Frosty
         GENERATE_INFOPLIST_FILE: YES
+        # Sparkle's SU* keys can't be written through INFOPLIST_KEY_*, so they live in
+        # a partial plist that Xcode merges with the generated one.
+        INFOPLIST_FILE: Frosty/App/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: Frosty
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Accessory app: no Dock icon of its own, no Cmd-Tab entry.
         INFOPLIST_KEY_LSUIElement: YES
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
-        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright 2026 Christopher Robinson. MIT License."
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright 2026 CX Ventures LLC. Business Source License 1.1."
+        # Every release bumps BOTH. MARKETING_VERSION is what people read;
+        # CURRENT_PROJECT_VERSION (an integer) is what Sparkle compares, so it must
+        # rise with each release or no one is offered the update. scripts/release.sh
+        # enforces both.
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         ENABLE_HARDENED_RUNTIME: YES

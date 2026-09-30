@@ -8,32 +8,58 @@ then draws its own bar at the bottom of the main display.
 
 ![Frosty's bar: pinned apps, a divider, and the Open Apps group](docs/bar.png)
 
-## Requirements and install
+## Install
 
-macOS 14 (Sonoma) or later, Xcode 16+, and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-(`brew install xcodegen`). There is no prebuilt release yet; build it:
+Requires macOS 14 (Sonoma) or later.
+
+1. Download `Frosty-X.Y.Z-macOS.dmg` from the
+   [latest release](https://github.com/cxrobx/frosty/releases/latest).
+2. Open it and drag **Frosty** onto **Applications**, then launch it.
+
+Releases are signed with a Developer ID and notarized by Apple, so macOS opens them
+without a warning. Frosty then updates itself: it checks for a new release once a day,
+asks before installing one, and relaunches into the new version. **Check for Updates…** in
+the ❄︎ menu checks right away. Each update is signed with an EdDSA key that only the
+maintainer holds, and Frosty refuses any archive that doesn't verify.
+
+### First launch: permissions
+
+Badges and each app's own right-click menu are read from the real Dock, so they need
+**Accessibility** (Frosty's menu → Allow Accessibility). **Always-Fresh App Menus**
+(off by default) also needs **Screen Recording**; macOS asks when you turn it on.
+Grants stick across updates, because every release is signed with the same Developer ID.
+
+If badges vanish after an update or a rebuild, the old grant is stale. Toggling Frosty off and on in
+System Settings → Privacy & Security → Accessibility does nothing, even though the entry
+still looks enabled. Remove Frosty from the list with **−**, then add it again with **+**
+(or use Allow Accessibility from Frosty's menu).
+
+### Build from source
+
+Needs Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+(`brew install xcodegen`). `scripts/install.sh` builds a Release copy, installs it into
+`/Applications` and re-signs it with the first Apple Development identity in your
+keychain, so the Accessibility grant survives rebuilds (set `FROSTY_SIGN_IDENTITY` to pick
+another, or `-` to stay ad-hoc; on a managed Mac where `/Applications` is locked, set
+`FROSTY_APP_DIR=~/Applications`).
 
 ```sh
 git clone https://github.com/cxrobx/frosty.git && cd frosty
+scripts/install.sh
+```
+
+Or by hand:
+
+```sh
 xcodegen generate
 xcodebuild -project Frosty.xcodeproj -scheme Frosty -configuration Release -derivedDataPath build build
 cp -R build/Build/Products/Release/Frosty.app /Applications/
 open /Applications/Frosty.app
 ```
 
-The build is ad-hoc signed, so the first launch may need right-click → Open.
-
-Badges and each app's own right-click menu are read from the real Dock, so they need
-Accessibility access (Frosty's menu → Allow Accessibility). macOS ties that grant to an
-ad-hoc build, so it is lost on every rebuild. `scripts/install.sh` builds, installs and
-re-signs the app with the first Apple Development identity in your keychain, so the
-grant sticks (set `FROSTY_SIGN_IDENTITY` to pick another, or `-` to stay ad-hoc). On a managed Mac where `/Applications` is locked, set
-`FROSTY_APP_DIR=~/Applications`.
-
-If badges vanish after a rebuild, the old grant is stale. Toggling Frosty off and on in
-System Settings → Privacy & Security → Accessibility does nothing, even though the entry
-still looks enabled. Remove Frosty from the list with **−**, then add it again with **+**
-(or use Allow Accessibility from Frosty's menu).
+A plain build is ad-hoc signed, so the first launch may need right-click → Open, and
+macOS ties its Accessibility grant to that exact build. A source build checks the same
+update feed as a release.
 
 **Known limit:** App Exposé and Mission Control always bring the real Dock up.
 That is macOS, not a setting; every Dock replacement shares it.
@@ -61,6 +87,28 @@ open build/Build/Products/Debug/Frosty.app
 
 The test target is deliberately not hosted by the app: a hosted run would launch
 Frosty and hide the Dock. It compiles `Frosty/Model/` directly instead.
+
+## Releasing
+
+For the maintainer. A release is built, notarized and staged locally; publishing is one
+deliberate command.
+
+1. In `project.yml`, bump `MARKETING_VERSION` (what people read, `0.1.1`) **and**
+   `CURRENT_PROJECT_VERSION` (an integer, `2`). Sparkle offers an update only when the
+   build number is higher than the installed one, so it must rise with every release;
+   the script refuses a number that has not gone above every earlier tag's. Commit.
+2. `scripts/release.sh 0.1.1` refuses a dirty tree, an existing `v0.1.1` tag or release, or a
+   version that doesn't match `project.yml`. It archives, exports with Developer ID,
+   notarizes and staples the app, builds the zip Sparkle installs from and the DMG people
+   download (both with `.sha256` files), signs the zip with the EdDSA key and writes
+   `appcast.xml`, all into `dist/0.1.1/`, then verifies the result and prints the exact
+   `gh release create …` command. It never publishes unless given `--publish`.
+3. Push the commit, run that command, then `scripts/verify-update-feed.sh` to check the
+   live feed. `verify-update-feed.sh dist/0.1.1` checks a staged release before it is live.
+
+The EdDSA private key lives in the login Keychain (account `frosty`) with a copy in the
+secret `SPARKLE_ED_PRIVATE_FROSTY`. Lose both and installed copies can never be updated.
+The public half is `SUPublicEDKey` in `Frosty/App/Info.plist`; don't change it.
 
 ## Using it
 

@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let supportDir = FileManager.default
@@ -11,6 +12,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var model: FrostyModel!
     private var bar: BarController!
     private var statusItem: NSStatusItem!
+    /// Sparkle: checks the appcast once a day (Info.plist SU* keys) and owns the
+    /// "Check for Updates…" menu item. Installing quits Frosty, so the Dock comes
+    /// back in applicationWillTerminate, and the new copy hides it again on launch.
+    private var updaterController: SPUStandardUpdaterController!
     private var signalSources: [DispatchSourceSignal] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -20,6 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setUpStatusItem()
         restoreDockOnSignals()
         hideRealDock()
+        updaterController = SPUStandardUpdaterController(startingUpdater: true,
+                                                         updaterDelegate: nil,
+                                                         userDriverDelegate: nil)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -94,6 +102,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                      action: #selector(requestAccessibility), keyEquivalent: "")]
         }
 
+        // Sparkle's controller is the target: it enables the item itself while a check runs.
+        let checkForUpdates = NSMenuItem(title: "Check for Updates…",
+                                         action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+                                         keyEquivalent: "")
+        checkForUpdates.target = updaterController
+
         for item in [hideDock, autoHide, groupUnpinned, badges, fresh] + accessNote + [
                      .separator(),
                      sizeItem,
@@ -101,8 +115,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                      NSMenuItem(title: "Edit Config…", action: #selector(editConfig), keyEquivalent: ""),
                      NSMenuItem(title: "Reload Config", action: #selector(reloadConfig), keyEquivalent: ""),
                      .separator(),
+                     checkForUpdates,
+                     .separator(),
                      NSMenuItem(title: "Quit Frosty (restores the Dock)", action: #selector(quit), keyEquivalent: "q")] as [NSMenuItem] {
-            item.target = self
+            if item.target == nil { item.target = self }
             menu.addItem(item)
         }
     }

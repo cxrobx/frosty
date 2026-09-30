@@ -9,6 +9,9 @@
 # app's Accessibility grant to that exact build, so badges and App Menu stop working
 # after every rebuild; a real identity keeps one grant across rebuilds. Set
 # FROSTY_SIGN_IDENTITY to pick another identity, or to "-" to leave it ad-hoc.
+#
+# This is the local-dev install. Releases come from scripts/release.sh (Developer ID,
+# notarized).
 set -eu
 cd "$(dirname "$0")/.."
 APP_DIR="${FROSTY_APP_DIR:-/Applications}"
@@ -26,6 +29,16 @@ mkdir -p "$APP_DIR"
 rm -rf "$APP_DIR/Frosty.app"
 cp -R build/Build/Products/Release/Frosty.app "$APP_DIR/"
 if [ -n "$SIGN_IDENTITY" ] && [ "$SIGN_IDENTITY" != "-" ]; then
+    # Inside out. The hardened runtime refuses to load a framework signed by another
+    # team (or ad-hoc), so Sparkle's pieces must carry the same identity as the app.
+    SPARKLE="$APP_DIR/Frosty.app/Contents/Frameworks/Sparkle.framework"
+    for nested in "$SPARKLE/Versions/B/XPCServices/Installer.xpc" \
+                  "$SPARKLE/Versions/B/XPCServices/Downloader.xpc" \
+                  "$SPARKLE/Versions/B/Autoupdate" \
+                  "$SPARKLE/Versions/B/Updater.app" \
+                  "$SPARKLE"; do
+        [ -e "$nested" ] && codesign --force --options runtime --preserve-metadata=entitlements --sign "$SIGN_IDENTITY" "$nested"
+    done
     codesign --force --options runtime --sign "$SIGN_IDENTITY" "$APP_DIR/Frosty.app"
 else
     echo "Frosty is ad-hoc signed: re-grant Accessibility after this install." >&2

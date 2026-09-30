@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		Sparkle 2 settings. Merged by Xcode with the keys project.yml generates
+		(INFOPLIST_KEY_*), which can't carry Sparkle's SU* keys. Checked by
+		FrostyTests/UpdaterConfigTests.swift and scripts/verify-update-feed.sh.
+	-->
+
+	<!-- Where updates are announced: the appcast.xml attached to the newest GitHub
+	     release. scripts/release.sh builds it and scripts/verify-update-feed.sh checks it. -->
+	<key>SUFeedURL</key>
+	<string>https://github.com/cxrobx/frosty/releases/latest/download/appcast.xml</string>
+
+	<!-- Public half of the EdDSA key that signs every update archive. The private half
+	     is in the login Keychain (account "frosty") and backed up as the secret
+	     SPARKLE_ED_PRIVATE_FROSTY. Changing this strands every installed copy: they
+	     would reject updates signed with the new key. -->
+	<key>SUPublicEDKey</key>
+	<string>GD1wT6N1LLpCRDgNqevt7/UjFoXbciW3WFACLUAFhWw=</string>
+
+	<!-- Check once a day without asking; prompt before installing. -->
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+
+	<!-- Check the EdDSA signature before extracting the archive, not after. -->
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
+</dict>
+</plist>
