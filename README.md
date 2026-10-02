@@ -103,6 +103,8 @@ deliberate command.
    download (both with `.sha256` files), signs the zip with the EdDSA key and writes
    `appcast.xml`, all into `dist/0.1.1/`, then verifies the result and prints the exact
    `gh release create …` command. It never publishes unless given `--publish`.
+   `scripts/release.sh 0.1.1 --check` runs only those refusals and the signing-key,
+   identity and notary checks, then stops: a dry run that builds nothing.
 3. Push the commit, run that command, then `scripts/verify-update-feed.sh` to check the
    live feed. `verify-update-feed.sh dist/0.1.1` checks a staged release before it is live.
 

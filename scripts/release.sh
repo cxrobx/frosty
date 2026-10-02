@@ -3,6 +3,8 @@
 #
 #   scripts/release.sh VERSION            # build + verify into dist/VERSION/, print the gh command
 #   scripts/release.sh VERSION --publish  # the same, then run that gh command
+#   scripts/release.sh VERSION --check    # only the preflight below (tree, tag, versions, signing key,
+#                                         # identity, notary profile), then stop: nothing is built
 #
 # Nothing is committed, tagged, pushed or uploaded without --publish. Without it the
 # only thing that leaves this Mac is the notarization upload to Apple.
@@ -57,15 +59,18 @@ die()  { printf '\033[0;31m[ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
 # -- Arguments -----------------------------------------------------------------
 VERSION=""
 PUBLISH=false
+CHECK=false
 for arg in "$@"; do
     case "$arg" in
         --publish) PUBLISH=true ;;
+        --check) CHECK=true ;;
         -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
-        -*) die "unknown option: $arg (usage: scripts/release.sh VERSION [--publish])" ;;
+        -*) die "unknown option: $arg (usage: scripts/release.sh VERSION [--publish|--check])" ;;
         *)  [[ -z "$VERSION" ]] || die "only one VERSION, got '$VERSION' and '$arg'"; VERSION="$arg" ;;
     esac
 done
-[[ -n "$VERSION" ]] || die "usage: scripts/release.sh VERSION [--publish]"
+[[ -n "$VERSION" ]] || die "usage: scripts/release.sh VERSION [--publish|--check]"
+! { $PUBLISH && $CHECK; } || die "--check builds nothing, so it can't --publish; pick one"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "VERSION must look like 1.2.3, got '$VERSION'"
 TAG="v$VERSION"
 
@@ -162,6 +167,11 @@ if $PUBLISH; then
     command -v gh >/dev/null || die "--publish needs the gh CLI"
     [[ -n "$(git branch -r --contains HEAD 2>/dev/null)" ]] \
         || die "--publish: HEAD ($(git rev-parse --short HEAD)) is not on origin; push it first, the release tag is created there"
+fi
+
+if $CHECK; then
+    ok "every check before the build passed (--check): nothing was built"
+    exit 0
 fi
 
 # -- Paths ----------------------------------------------------------------------
