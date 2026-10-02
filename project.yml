@@ -61,6 +61,7 @@ targets:
       - path: FrostyTests
       - path: Frosty/Model
       - path: Frosty/System/Apps.swift
+      - path: Frosty/System/LaunchAtLogin.swift
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

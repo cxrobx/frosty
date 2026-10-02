@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import Sparkle
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -12,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var model: FrostyModel!
     private var bar: BarController!
     private var statusItem: NSStatusItem!
+    private let launchAtLogin = LaunchAtLogin()
     /// Sparkle: checks the appcast once a day (Info.plist SU* keys) and owns the
     /// "Check for Updates…" menu item. Installing quits Frosty, so the Dock comes
     /// back in applicationWillTerminate, and the new copy hides it again on launch.
@@ -82,6 +84,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hideDock.state = hider.isHidden ? .on : .off
         let autoHide = NSMenuItem(title: "Auto-hide Frosty", action: #selector(toggleAutoHide), keyEquivalent: "")
         autoHide.state = model.config.autoHide ? .on : .off
+        let loginStatus = launchAtLogin.status
+        let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        launchAtLoginItem.toolTip = "Open Frosty automatically when you sign in after restarting your Mac."
+        switch loginStatus {
+        case .enabled: launchAtLoginItem.state = .on
+        case .requiresApproval: launchAtLoginItem.state = .mixed
+        default: launchAtLoginItem.state = .off
+        }
+        var loginItems = [launchAtLoginItem]
+        if loginStatus == .requiresApproval {
+            loginItems.append(NSMenuItem(title: "Allow Launch at Login in System Settings…",
+                                         action: #selector(requestLoginItemApproval), keyEquivalent: ""))
+        }
         let groupUnpinned = NSMenuItem(title: "Group Unpinned Apps", action: #selector(toggleGroupUnpinned), keyEquivalent: "")
         groupUnpinned.state = model.config.groupUnpinned ? .on : .off
 
@@ -108,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                          keyEquivalent: "")
         checkForUpdates.target = updaterController
 
-        for item in [hideDock, autoHide, groupUnpinned, badges, fresh] + accessNote + [
+        for item in loginItems + [hideDock, autoHide, groupUnpinned, badges, fresh] + accessNote + [
                      .separator(),
                      sizeItem,
                      .separator(),
@@ -153,6 +168,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleAutoHide() {
         model.edit { $0.autoHide.toggle() }
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        do {
+            try launchAtLogin.toggle()
+            if launchAtLogin.status == .requiresApproval { requestLoginItemApproval() }
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Frosty couldn't change Launch at Login"
+            alert.informativeText = "Try again, or manage Frosty in System Settings → General → Login Items.\n\n\(error.localizedDescription)"
+            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: "Open System Settings")
+            NSApp.activate(ignoringOtherApps: true)
+            if alert.runModal() == .alertSecondButtonReturn { SMAppService.openSystemSettingsLoginItems() }
+        }
+    }
+
+    @objc private func requestLoginItemApproval() {
+        let alert = NSAlert()
+        alert.messageText = "Allow Frosty to launch at login"
+        alert.informativeText = "Enable Frosty in System Settings → General → Login Items so it can open automatically when you sign in, including after a restart."
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Not Now")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn { SMAppService.openSystemSettingsLoginItems() }
     }
 
     @objc private func toggleBadges() {

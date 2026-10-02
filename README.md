@@ -112,6 +112,12 @@ The public half is `SUPublicEDKey` in `Frosty/App/Info.plist`; don't change it.
 
 ## Using it
 
+- **Launch at Login:** enable it in the ❄︎ menu to open Frosty automatically when
+  you sign in, including after restarting your Mac. It is off until you enable it.
+  macOS remembers the setting across launches; turn it off in the same menu to
+  stop automatic launches. If macOS needs approval, the item shows a dash and
+  **Allow Launch at Login in System Settings…** takes you to Login Items to enable
+  Frosty. The menu also reflects changes made in System Settings.
 - **Bar:** placed apps in config order, then a separator, then running apps that
   aren't placed. Two or more of those collect into one **Open Apps** group (turn
   off with *Group Unpinned Apps* in the ❄︎ menu, or `"groupUnpinned": false`).
@@ -142,7 +148,7 @@ The public half is `SUPublicEDKey` in `Frosty/App/Info.plist`; don't change it.
   the bar moves there, as the real Dock does. It remembers that display across
   restarts (`"display"` in the config); while it is unplugged the bar waits on the
   main display.
-- **Menu-bar ❄︎:** Hide the Real Dock · Auto-hide Frosty · Group Unpinned Apps · Icon Size · Edit Config… · Reload
+- **Menu-bar ❄︎:** Launch at Login · Hide the Real Dock · Auto-hide Frosty · Group Unpinned Apps · Icon Size · Edit Config… · Reload
   Config · Quit.
 
 ## Config
@@ -175,8 +181,8 @@ drag-to-reorder yet.
 
 ## Not built (yet)
 
-No drag-and-drop onto icons · no badges · no window previews ·
-no launch at login. Minimize, Mission Control and Cmd-Tab still use Apple's hidden
+No drag-and-drop onto icons · no badges · no window previews.
+Minimize, Mission Control and Cmd-Tab still use Apple's hidden
 Dock, which no third-party bar can take over.
 
 ## License
