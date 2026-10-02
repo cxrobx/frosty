@@ -46,8 +46,8 @@ targets:
         # CURRENT_PROJECT_VERSION (an integer) is what Sparkle compares, so it must
         # rise with each release or no one is offered the update. scripts/release.sh
         # enforces both.
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "0.1.1"
+        CURRENT_PROJECT_VERSION: "2"
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_IDENTITY: "-"
         CODE_SIGN_STYLE: Automatic
