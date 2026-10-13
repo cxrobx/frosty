@@ -67,6 +67,7 @@ final class BarController {
     /// bottom of the screen in its place.
     var realDockHidden: () -> Bool = { false }
     private let reservation = ScreenReservation(restartDock: { SystemDockDefaults().restartDock() })
+    private lazy var trimmer = WindowTrimmer(strip: { [weak self] in self?.reservation.current })
     private let cornerRadius: CGFloat = 18
 
     init(model: FrostyModel) {
@@ -128,10 +129,13 @@ final class BarController {
         // Frosty's, and says nothing; asking the window server is cheap.
         Timer.publish(every: 2, on: .main, in: .common).autoconnect()
             .sink { [weak self] _ in
-                guard let self, !self.reservation.isInPlace else { return }
-                self.reservation.reassert()
+                guard let self, self.reservation.current != nil else { return }
+                // Picks up apps missed before Accessibility was granted; a no-op otherwise.
+                self.trimmer.watchRunningApps()
+                if !self.reservation.isInPlace { self.reservation.reassert() }
             }
             .store(in: &cancellables)
+        trimmer.start()
 
         let events: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
         if let global = NSEvent.addGlobalMonitorForEvents(matching: events, handler: { [weak self] _ in self?.mouseMoved() }) {
@@ -207,8 +211,11 @@ final class BarController {
             reservation.set(nil)
             return
         }
+        let wasReserved = reservation.current != nil
         reservation.set(ReservedStrip.rect(bottomOf: screen.frame, height: hosting.fittingSize.height + gap,
                                            primaryHeight: primary.frame.height))
+        // Windows filled while the bar was auto-hiding now sit under it.
+        if !wasReserved, reservation.current != nil { trimmer.trimAll() }
     }
 
     private func showGroup(_ name: String?) {

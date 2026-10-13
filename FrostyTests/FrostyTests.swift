@@ -381,3 +381,38 @@ final class ReservedStripTests: XCTestCase {
         XCTAssertEqual(strip, CGRect(x: 1728, y: 1117 + 1440 - 61, width: 2560, height: 61))
     }
 }
+
+final class TrimmedHeightTests: XCTestCase {
+    // The 61 pt strip at the bottom of a 1728 x 1117 display, under a 33 pt menu bar.
+    let strip = CGRect(x: 0, y: 1056, width: 1728, height: 61)
+
+    func testAFilledWindowStopsAboveTheBar() {
+        XCTAssertEqual(ReservedStrip.trimmedHeight(windowTop: 33, windowHeight: 1084, windowMinX: 0, windowMaxX: 1728,
+                                                   strip: strip), 1023)
+    }
+
+    func testABottomTileStopsAboveTheBar() {
+        XCTAssertEqual(ReservedStrip.trimmedHeight(windowTop: 575, windowHeight: 542, windowMinX: 864, windowMaxX: 1728,
+                                                   strip: strip), 481)
+    }
+
+    func testAWindowDraggedPartlyOffTheBottomIsLeftAlone() {
+        XCTAssertNil(ReservedStrip.trimmedHeight(windowTop: 900, windowHeight: 400, windowMinX: 100, windowMaxX: 900,
+                                                 strip: strip))
+    }
+
+    func testAWindowAboveTheBarIsLeftAlone() {
+        XCTAssertNil(ReservedStrip.trimmedHeight(windowTop: 33, windowHeight: 1023, windowMinX: 0, windowMaxX: 1728,
+                                                 strip: strip))
+    }
+
+    func testAWindowOnAnotherDisplayIsLeftAlone() {
+        XCTAssertNil(ReservedStrip.trimmedHeight(windowTop: 33, windowHeight: 1084, windowMinX: 1728, windowMaxX: 3000,
+                                                 strip: strip))
+    }
+
+    func testAWindowTooShortToTrimIsLeftAlone() {
+        XCTAssertNil(ReservedStrip.trimmedHeight(windowTop: 1000, windowHeight: 117, windowMinX: 0, windowMaxX: 400,
+                                                 strip: strip))
+    }
+}
