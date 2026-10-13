@@ -51,9 +51,15 @@ enum FlashCover {
                 window.hasShadow = false
                 window.isReleasedWhenClosed = false
                 window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-                let view = NSImageView(frame: NSRect(origin: .zero, size: rect.size))
-                view.image = NSImage(cgImage: image, size: rect.size)
-                view.imageScaling = .scaleAxesIndependently
+                // On macOS 26 the cover zoomed in as it ordered front, from about
+                // 1% small, so the still swam against the screen under it. With
+                // no window animation and the still drawn by a plain layer
+                // rather than an NSImageView, it appears in place.
+                window.animationBehavior = .none
+                let view = NSView(frame: NSRect(origin: .zero, size: rect.size))
+                view.wantsLayer = true
+                view.layer?.contents = image
+                view.layer?.contentsGravity = .resize
                 window.contentView = view
                 window.orderFrontRegardless()
                 window.display()
