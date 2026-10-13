@@ -445,25 +445,12 @@ final class BarController {
         return groupPanel.isVisible && groupPanel.frame.union(panel.frame).insetBy(dx: -16, dy: -16).contains(p)
     }
 
-    private static let dockGlassVariant = 2
-
     /// `content` on the bar's backdrop: Liquid Glass from macOS 26, like the
     /// real Dock, and a frosted HUD blur before that.
     private static func frosted(_ content: NSView, radius: CGFloat) -> NSView {
         if #available(macOS 26.0, *) {
-            let glass = NSGlassEffectView()
+            let glass = DockGlassView()
             glass.cornerRadius = radius
-            // The Dock's own glass, a private variant: clear at any size, where
-            // the public styles turn milky over a light backdrop and grey once
-            // taller than about 60 pt.
-            if glass.responds(to: NSSelectorFromString("set_variant:")) {
-                glass.setValue(Self.dockGlassVariant, forKey: "_variant")
-            }
-            // And like the Dock, keep its light tint over a dark backdrop. The
-            // default, 2, darkened short glass there until it looked opaque.
-            if glass.responds(to: NSSelectorFromString("set_adaptiveAppearance:")) {
-                glass.setValue(1, forKey: "_adaptiveAppearance")
-            }
             glass.contentView = content
             return glass
         }
@@ -486,6 +473,68 @@ final class BarController {
         image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
         image.resizingMode = .stretch
         return image
+    }
+}
+
+/// Glass set up like the real Dock's. The Dock builds its own (DesignLibrary's
+/// `GlassMaterialProvider.Configuration.dock`, non-adaptive); AppKit's view gets
+/// the same variant and adaptivity through private keys, but blurs and lightens
+/// its backdrop far more and leaves edge refraction off, so the bar read as
+/// frosted next to the Dock. Its backdrop filter is retuned after every layout,
+/// since AppKit rebuilds it. If any of this goes away, it is plain glass.
+@available(macOS 26.0, *)
+private final class DockGlassView: NSGlassEffectView {
+    /// `GlassMaterialProvider.Variant.dock`.
+    private static let dockVariant = 2
+    /// `_NSGlassEffectViewAdaptiveAppearance`: 0 automatic, 1 off, 2 on.
+    private static let adaptiveOff = 1
+    /// Matched by eye against the Dock over the same backdrop.
+    private static let filterTuning: [String: Double] = [
+        "inputRefractionOpacity": 1,      // AppKit: 0
+        "inputBlurRadius": 1.5,           // AppKit: 5.8
+        "inputFaceColorMatrixWhite": 0.75 // AppKit: 0.95
+    ]
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        if responds(to: NSSelectorFromString("set_variant:")) { setValue(Self.dockVariant, forKey: "_variant") }
+        if responds(to: NSSelectorFromString("set_adaptiveAppearance:")) {
+            setValue(Self.adaptiveOff, forKey: "_adaptiveAppearance")
+        }
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func layout() {
+        super.layout()
+        tuneBackdrop()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        tuneBackdrop()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        tuneBackdrop()
+    }
+
+    private func tuneBackdrop() {
+        guard let layer, let backdrop = Self.backdrop(in: layer),
+              let filter = backdrop.filters?.first as? NSObject,
+              filter.description == "glassBackground" else { return }
+        for (key, value) in Self.filterTuning where (filter.value(forKey: key) as? Double) != value {
+            backdrop.setValue(value, forKeyPath: "filters.glassBackground.\(key)")
+        }
+    }
+
+    private static func backdrop(in layer: CALayer) -> CALayer? {
+        if NSStringFromClass(type(of: layer)) == "CABackdropLayer" { return layer }
+        for sublayer in layer.sublayers ?? [] {
+            if let found = backdrop(in: sublayer) { return found }
+        }
+        return nil
     }
 }
 
