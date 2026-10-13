@@ -366,3 +366,18 @@ final class AppIconTests: XCTestCase {
         XCTAssertEqual(Apps.icon("com.example.icon").size.width, 16)
     }
 }
+
+final class ReservedStripTests: XCTestCase {
+    func testBottomOfTheMainDisplay() {
+        let strip = ReservedStrip.rect(bottomOf: CGRect(x: 0, y: 0, width: 1728, height: 1117), height: 61,
+                                       primaryHeight: 1117)
+        XCTAssertEqual(strip, CGRect(x: 0, y: 1056, width: 1728, height: 61))
+    }
+
+    func testBottomOfADisplayBelowAndRightOfTheMainOne() {
+        // AppKit puts a display below the main one at a negative y.
+        let strip = ReservedStrip.rect(bottomOf: CGRect(x: 1728, y: -1440, width: 2560, height: 1440), height: 61,
+                                       primaryHeight: 1117)
+        XCTAssertEqual(strip, CGRect(x: 1728, y: 1117 + 1440 - 61, width: 2560, height: 61))
+    }
+}

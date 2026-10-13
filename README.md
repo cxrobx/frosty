@@ -146,6 +146,9 @@ The public half is `SUPublicEDKey` in `Frosty/App/Info.plist`; don't change it.
 - **Right-click a group:** Rename… · Ungroup.
 - **Resize:** drag the divider up or down, as in the real Dock, or use the Icon
   Size slider in the ❄︎ menu (the bar stays up while the menu is open). 16–128 pt.
+- **Room for the bar:** with Auto-hide Frosty off, the bar reserves the bottom of the
+  screen as the real Dock does, so maximized windows stop above it (macOS 26's
+  Window › Fill and tiling still use the whole screen, because the real Dock is set to auto-hide).
 - **Other displays:** push the pointer against the bottom edge of any display and
   the bar moves there, as the real Dock does. It remembers that display across
   restarts (`"display"` in the config); while it is unplugged the bar waits on the

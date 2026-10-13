@@ -63,6 +63,10 @@ final class BarController {
     private var cancellables: Set<AnyCancellable> = []
 
     private let gap: CGFloat = 6          // space between the bar and the screen edge
+    /// Whether the real Dock is hidden. Only then does Frosty reserve the
+    /// bottom of the screen in its place.
+    var realDockHidden: () -> Bool = { false }
+    private let reservation = ScreenReservation(restartDock: { SystemDockDefaults().restartDock() })
     private let cornerRadius: CGFloat = 18
 
     init(model: FrostyModel) {
@@ -119,6 +123,14 @@ final class BarController {
             .store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .sink { [weak self] _ in self?.layout(animated: false) }
+            .store(in: &cancellables)
+        // The Dock reports its own strip again whenever it likes, replacing
+        // Frosty's, and says nothing; asking the window server is cheap.
+        Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+            .sink { [weak self] _ in
+                guard let self, !self.reservation.isInPlace else { return }
+                self.reservation.reassert()
+            }
             .store(in: &cancellables)
 
         let events: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
@@ -179,6 +191,24 @@ final class BarController {
         } else {
             panel.setFrame(target, display: true)
         }
+        updateReservation()
+    }
+
+    /// Keeps maximized and tiled windows clear of the bar while it stays up,
+    /// as the real Dock does; an auto-hiding bar reserves nothing, like an
+    /// auto-hiding Dock.
+    func updateReservation() {
+        guard realDockHidden() else {
+            // Restoring the Dock restarted it, and that cleared Frosty's strip.
+            reservation.forget()
+            return
+        }
+        guard !model.config.autoHide, let screen, let primary = NSScreen.screens.first else {
+            reservation.set(nil)
+            return
+        }
+        reservation.set(ReservedStrip.rect(bottomOf: screen.frame, height: hosting.fittingSize.height + gap,
+                                           primaryHeight: primary.frame.height))
     }
 
     private func showGroup(_ name: String?) {

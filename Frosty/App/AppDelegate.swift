@@ -24,9 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model = FrostyModel(configURL: supportDir.appendingPathComponent("config.json"),
                             seed: dock.pinnedBundleIDs)
         bar = BarController(model: model)
+        bar.realDockHidden = { [unowned self] in self.hider.isHidden }
         setUpStatusItem()
         restoreDockOnSignals()
         hideRealDock()
+        bar.updateReservation()
         updaterController = SPUStandardUpdaterController(startingUpdater: true,
                                                          updaterDelegate: nil,
                                                          userDriverDelegate: nil)
@@ -164,6 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleRealDock() {
         if hider.isHidden { hider.restore() } else { hideRealDock() }
+        bar.updateReservation()
     }
 
     @objc private func toggleAutoHide() {
