@@ -37,7 +37,6 @@ final class BarController {
     private let model: FrostyModel
     private let panel = BarPanel()
     private let hosting: FirstMouseHostingView<BarView>
-    private let background = NSVisualEffectView()
     /// The open group's app grid: a second never-key panel, so its tiles also
     /// take the first click (a SwiftUI popover swallowed it).
     private let groupPanel = BarPanel()
@@ -74,9 +73,7 @@ final class BarController {
         hosting = FirstMouseHostingView(rootView: BarView(model: model))
         hosting.sizingOptions = [.intrinsicContentSize]
 
-        Self.frost(background, radius: cornerRadius)
-        background.addSubview(hosting)
-        panel.contentView = background
+        panel.contentView = Self.frosted(hosting, radius: cornerRadius)
 
         // Refit the bar and the open group after any model change: tiles, badges
         // or icon size. The
@@ -192,10 +189,12 @@ final class BarController {
         }
         let grid = FirstMouseHostingView(rootView: GroupGrid(model: model, name: name))
         grid.sizingOptions = [.intrinsicContentSize]
-        let effect = NSVisualEffectView()
-        Self.frost(effect, radius: 14)
-        effect.addSubview(grid)
-        groupPanel.contentView = effect
+        groupPanel.contentView = Self.frosted(grid, radius: 14)
+        // Glass as short as the bar matches its backdrop, light or dark, but a
+        // taller panel just follows the system and turned flat grey over a dark
+        // backdrop. The panel sits over the same backdrop as the bar, so take its look.
+        groupPanel.appearance = hosting.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua])
+            .flatMap(NSAppearance.init(named:))
         groupHosting = grid
         placeGroupPanel(name)
         groupPanel.orderFrontRegardless()
@@ -446,11 +445,30 @@ final class BarController {
         return groupPanel.isVisible && groupPanel.frame.union(panel.frame).insetBy(dx: -16, dy: -16).contains(p)
     }
 
-    private static func frost(_ view: NSVisualEffectView, radius: CGFloat) {
+    private static let dockGlassVariant = 2
+
+    /// `content` on the bar's backdrop: Liquid Glass from macOS 26, like the
+    /// real Dock, and a frosted HUD blur before that.
+    private static func frosted(_ content: NSView, radius: CGFloat) -> NSView {
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView()
+            glass.cornerRadius = radius
+            // The Dock's own glass, a private variant: clear at any size, where
+            // the public styles turn milky over a light backdrop and grey once
+            // taller than about 60 pt.
+            if glass.responds(to: NSSelectorFromString("set_variant:")) {
+                glass.setValue(Self.dockGlassVariant, forKey: "_variant")
+            }
+            glass.contentView = content
+            return glass
+        }
+        let view = NSVisualEffectView()
         view.material = .hudWindow
         view.blendingMode = .behindWindow
         view.state = .active
         view.maskImage = roundedMask(radius: radius)
+        view.addSubview(content)
+        return view
     }
 
     private static func roundedMask(radius: CGFloat) -> NSImage {
