@@ -459,6 +459,11 @@ final class BarController {
             if glass.responds(to: NSSelectorFromString("set_variant:")) {
                 glass.setValue(Self.dockGlassVariant, forKey: "_variant")
             }
+            // And like the Dock, keep its light tint over a dark backdrop. The
+            // default, 2, darkened short glass there until it looked opaque.
+            if glass.responds(to: NSSelectorFromString("set_adaptiveAppearance:")) {
+                glass.setValue(1, forKey: "_adaptiveAppearance")
+            }
             glass.contentView = content
             return glass
         }
