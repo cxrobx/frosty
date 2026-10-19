@@ -50,6 +50,8 @@ final class BarController {
     private var menusOpen = 0
     /// An app's own Dock menu, opened by a right-click on its tile, is up.
     private var dockMenuOpen = false
+    /// The pressed tile has a menu open on it, so it stays dim until the menu closes.
+    private var pressHeldByMenu = false
     private var dockMenuTimer: Timer?
     /// Each app's Dock menu, copied the first time the Dock shows it, so from
     /// then on Frosty draws it over its own tile. Refreshed on every pick that
@@ -119,6 +121,7 @@ final class BarController {
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.menusOpen = max(0, self.menusOpen - 1)
+                if self.menusOpen == 0, !self.dockMenuOpen { self.endPress() }
                 self.mouseMoved()
             }
             .store(in: &cancellables)
@@ -149,21 +152,21 @@ final class BarController {
         // does any tile the Dock has no menu for; the event then goes on to SwiftUI.
         if let context = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown], handler: { [weak self] e in
             guard let self else { return e }
-            if self.openDockMenu(for: e) { return nil }
             self.press(e)
-            return e
+            return self.openDockMenu(for: e) ? nil : e
         }) {
             monitors.append(context)
         }
         // A tile stays dim until the button comes up, as in the real Dock.
         if let release = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] e in
-            self?.model.pressedApp = nil
+            if self?.pressHeldByMenu == false { self?.endPress() }
             return e
         }) {
             monitors.append(release)
         }
-        if let release = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp,
-                                                           handler: { [weak self] _ in self?.model.pressedApp = nil }) {
+        if let release = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] _ in
+            if self?.pressHeldByMenu == false { self?.endPress() }
+        }) {
             monitors.append(release)
         }
         // A global monitor only sees clicks in other apps: any of them closes the group.
@@ -260,11 +263,18 @@ final class BarController {
                             display: true)
     }
 
-    /// Dims the app tile under a plain left click until the button comes up.
+    /// Dims the app tile under a click: until the button comes up, or for a
+    /// right-click or Control-click, until the menu it opens closes.
     private func press(_ event: NSEvent) {
-        guard event.type == .leftMouseDown, !event.modifierFlags.contains(.control),
-              let window = event.window else { return }
-        model.pressedApp = model.appTile(at: event.locationInWindow, in: window)?.appID
+        guard let window = event.window else { return }
+        let id = model.appTile(at: event.locationInWindow, in: window)?.appID
+        model.pressedApp = id
+        pressHeldByMenu = id != nil && (event.type == .rightMouseDown || event.modifierFlags.contains(.control))
+    }
+
+    private func endPress() {
+        pressHeldByMenu = false
+        model.pressedApp = nil
     }
 
     private func openDockMenu(for event: NSEvent) -> Bool {
@@ -299,7 +309,7 @@ final class BarController {
                     let lift = Timer(timeInterval: FlashCover.fadeOut, repeats: false) { _ in cover.orderOut(nil) }
                     RunLoop.main.add(lift, forMode: .common)
                     let items = raw.flatMap { $0.isEmpty ? nil : self.remember($0, for: id) } ?? self.dockMenus[id]?.items
-                    if let items { self.popUpDockMenu(items, for: id, over: tile, aboveCover: true) }
+                    if let items { self.popUpDockMenu(items, for: id, over: tile, aboveCover: true) } else { self.endPress() }
                 }
             }
         }
@@ -324,6 +334,8 @@ final class BarController {
                     self.popUpDockMenu(self.remember(raw, for: id), for: id, over: tile)
                 } else if RealDock.showMenu(id) {
                     self.watchDockMenu(id)
+                } else {
+                    self.endPress()
                 }
             }
         }
@@ -345,6 +357,7 @@ final class BarController {
             guard !RealDock.menuIsOpen else { return }
             timer.invalidate()
             self.dockMenuOpen = false
+            if self.menusOpen == 0 { self.endPress() }
             self.mouseMoved()
         }
     }
@@ -361,7 +374,7 @@ final class BarController {
     /// tile's own window, not the bar's: a tile in an open group sits in the
     /// group panel, and measuring it against the bar put its menu far off.
     private func popUpDockMenu(_ items: [DockMenuItem], for id: String, over tile: NSView, aboveCover: Bool = false) {
-        guard let view = tile.window?.contentView else { return }
+        guard let view = tile.window?.contentView else { endPress(); return }
         let items = DockMenu.matching(hidden: Apps.running(id)?.isHidden ?? false, items)
         let target = DockMenuTarget { [weak self] path in self?.perform(path, for: id) }
         let menu = NSMenu()
