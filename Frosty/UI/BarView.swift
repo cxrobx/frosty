@@ -88,6 +88,8 @@ struct AppTile: View {
                     .resizable()
                     .interpolation(.high)
                     .frame(width: size, height: size)
+                    // Held down: darkened, as the real Dock does, keeping the icon's transparency.
+                    .colorMultiply(model.pressedApp == id ? Color(white: 0.55) : .white)
                     .overlay(alignment: .topTrailing) { BadgeView(text: model.badge(id), size: size) }
                     .scaleEffect(hovering ? 1.08 : 1, anchor: .bottom)
                     .animation(.easeOut(duration: 0.12), value: hovering)
@@ -361,6 +363,8 @@ struct TileDrop: DropDelegate {
         let token = "frosty-tile-" + UUID().uuidString
         model.dragging = ref
         model.dragToken = token
+        // The drag session swallows the button coming up.
+        model.pressedApp = nil
         return NSItemProvider(object: token as NSString)
     }
 

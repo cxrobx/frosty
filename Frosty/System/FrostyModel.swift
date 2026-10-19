@@ -41,6 +41,8 @@ final class FrostyModel: ObservableObject {
     /// A view inside each app tile, measured when a right-click arrives, so the
     /// click can open the app's own Dock menu before SwiftUI opens Frosty's.
     let appTiles = NSHashTable<AppTileMarker>.weakObjects()
+    /// The app tile the mouse is held down on, drawn dimmed as in the real Dock.
+    @Published var pressedApp: String?
 
     /// The app tile under a point in a window's coordinates.
     func appTile(at point: NSPoint, in window: NSWindow) -> AppTileMarker? {

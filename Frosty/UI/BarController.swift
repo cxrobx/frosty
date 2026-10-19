@@ -149,9 +149,22 @@ final class BarController {
         // does any tile the Dock has no menu for; the event then goes on to SwiftUI.
         if let context = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown], handler: { [weak self] e in
             guard let self else { return e }
-            return self.openDockMenu(for: e) ? nil : e
+            if self.openDockMenu(for: e) { return nil }
+            self.press(e)
+            return e
         }) {
             monitors.append(context)
+        }
+        // A tile stays dim until the button comes up, as in the real Dock.
+        if let release = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] e in
+            self?.model.pressedApp = nil
+            return e
+        }) {
+            monitors.append(release)
+        }
+        if let release = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp,
+                                                           handler: { [weak self] _ in self?.model.pressedApp = nil }) {
+            monitors.append(release)
         }
         // A global monitor only sees clicks in other apps: any of them closes the group.
         if let clicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown],
@@ -245,6 +258,13 @@ final class BarController {
         let x = min(max(tileX - size.width / 2, screen.frame.minX + 8), screen.frame.maxX - size.width - 8)
         groupPanel.setFrame(NSRect(x: x.rounded(), y: panel.frame.maxY + 8, width: size.width, height: size.height),
                             display: true)
+    }
+
+    /// Dims the app tile under a plain left click until the button comes up.
+    private func press(_ event: NSEvent) {
+        guard event.type == .leftMouseDown, !event.modifierFlags.contains(.control),
+              let window = event.window else { return }
+        model.pressedApp = model.appTile(at: event.locationInWindow, in: window)?.appID
     }
 
     private func openDockMenu(for event: NSEvent) -> Bool {
